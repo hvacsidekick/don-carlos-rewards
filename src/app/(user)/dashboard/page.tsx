@@ -102,7 +102,7 @@ export default async function DashboardPage() {
       <RecentActivity items={recent ?? []} />
 
       <Button asChild variant="secondary" size="lg" className="w-full">
-        <Link href="/profile">
+        <Link href="/qr">
           <QrCode className="size-5" aria-hidden="true" />
           Show your QR code
         </Link>
