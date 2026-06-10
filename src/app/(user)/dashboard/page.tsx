@@ -45,6 +45,10 @@ export default async function DashboardPage() {
     supabase
       .from("transactions")
       .select("id, transaction_type, points_delta, points_balance_after, created_at, notes")
+      // Always scope to the signed-in user. RLS already restricts non-admins,
+      // but an admin's "read all" policy would otherwise surface the GLOBAL
+      // transaction feed on their own dashboard (m-4). Defense-in-depth.
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(3),
   ]);

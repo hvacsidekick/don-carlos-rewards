@@ -17,7 +17,7 @@ export function RewardsCardSkeleton() {
         {/* Ring + stamp area. */}
         <div className="relative grid size-[260px] place-items-center rounded-full">
           <Skeleton className="absolute inset-0 rounded-full" />
-          <div className="z-10 grid grid-cols-5 gap-2">
+          <div className="z-10 grid grid-cols-5 gap-2.5">
             {Array.from({ length: 10 }, (_, i) => (
               <Skeleton key={i} className="size-9 rounded-lg" />
             ))}

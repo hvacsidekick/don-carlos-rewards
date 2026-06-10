@@ -28,16 +28,22 @@ export type RedeemResult = {
   transactionId: string;
 };
 
-/** Detect the RPC's insufficient-balance signal (raised inside the function). */
-function isInsufficientBalance(message: string): boolean {
-  const m = message.toLowerCase();
-  return (
-    m.includes("insufficient") ||
-    m.includes("not enough") ||
-    // The function guards with `where ... points_balance >= pts returning ...`;
-    // a no-row return surfaces as a not-found / null result we also treat here.
-    m.includes("balance")
-  );
+/**
+ * Detect the RPC's insufficient-balance signal precisely.
+ *
+ * The `redeem_points` function raises exactly:
+ *   `raise exception 'insufficient balance' using errcode = 'P0001';`
+ * when the atomic `points_balance >= pts` guard rejects the debit
+ * (migration 20260610011444_points_functions.sql). PostgREST surfaces the
+ * SQLSTATE in `error.code` and the message text in `error.message`, so we
+ * match on either the `P0001` code or the exact `"insufficient balance"`
+ * phrase. Matching the specific signal (not any message containing "balance")
+ * stops an unrelated DB error from being mis-reported as "not enough points";
+ * such errors fall through to the generic friendly message instead (m-2).
+ */
+function isInsufficientBalance(error: { code?: string; message?: string }): boolean {
+  if (error.code === "P0001") return true;
+  return (error.message ?? "").toLowerCase().includes("insufficient balance");
 }
 
 /**
@@ -75,7 +81,7 @@ export async function redeemPointsAction(): Promise<ActionResult<RedeemResult>> 
   const { data, error } = await supabase.rpc("redeem_points", { pts: parsedThreshold.data });
 
   if (error) {
-    if (isInsufficientBalance(error.message)) {
+    if (isInsufficientBalance(error)) {
       return { ok: false, error: "You don't have enough points to redeem yet." };
     }
     return { ok: false, error: "We couldn't redeem your reward. Please try again." };

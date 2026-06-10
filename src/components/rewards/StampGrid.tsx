@@ -54,7 +54,12 @@ export function StampGrid({
       className={cn("grid", className)}
       style={{
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-        gap: 8,
+        // DESIGN_SYSTEM §5.2 pins 40px stamps + 12px gap, but that grid
+        // (248×92, diagonal ≈265px) overflows the ring's 252px inner diameter
+        // (260 − 8px stroke) and would clip the arc. We keep 36px stamps and a
+        // 10px gap (220×80, diagonal ≈234px) — fits with ~18px clearance while
+        // staying as close to the spec gap as the geometry allows (m-3).
+        gap: 10,
       }}
     >
       {Array.from({ length: total }, (_, i) => {

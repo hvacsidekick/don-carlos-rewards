@@ -207,10 +207,21 @@ export function RewardsCard({
       </div>
 
       <div className="mt-6 flex flex-col items-center gap-1 text-center">
-        <p className="text-title2 font-bold tabular-nums text-foreground" aria-live="polite">
+        {/*
+          The animating digits update every animation frame, so they are
+          `aria-hidden` to keep a screen reader from announcing each
+          intermediate count-up value. The settled balance is announced once
+          per change via the visually-hidden polite live region below (M-1).
+        */}
+        <p className="text-title2 font-bold tabular-nums text-foreground" aria-hidden="true">
           {formatPoints(displayBalance)}
         </p>
-        <p className="text-footnote text-fg-secondary">points</p>
+        <span className="sr-only" aria-live="polite" role="status">
+          {formatPoints(balance)} points
+        </span>
+        <p className="text-footnote text-fg-secondary" aria-hidden="true">
+          points
+        </p>
 
         {isZero ? (
           <div className="mt-3 flex flex-col items-center gap-2">
