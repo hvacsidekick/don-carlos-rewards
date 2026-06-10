@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Don Carlos Rewards — design tokens (DESIGN_SYSTEM.md §2).
+ *
+ * Solid colors are stored as space-separated RGB channels and consumed in
+ * Tailwind via `rgb(var(--x) / <alpha-value>)`. Mode-aware translucent tokens
+ * (separator, secondary/tertiary text, fills) carry their alpha inline.
+ *
+ * Brand colors (--dc-*) are intentionally constant across light & dark — they
+ * are the identity. Neutrals invert via the dark block. A future brand-hex
+ * change (open question O-2) is a one-line edit here.
+ */
+
+:root {
+  /* ---- Brand (constant in both modes) ---- */
+  --dc-red: 230 57 70; /* #E63946 — brand identity: stamps, ring, active tab, glow */
+  --dc-yellow: 249 199 79; /* #F9C74F */
+  --dc-green: 144 190 109; /* #90BE6D */
+  /* Darkened brand red for RED TEXT. Mode-aware: dark in light mode (AA on
+     white), light in dark mode (AA on black). See dark block. */
+  --dc-red-text: 195 42 55; /* #C32A37 — 5.67:1 small text on white */
+  /* AA-compliant brand-red FILL for white labels (primary button, default
+     badge). Constant in both modes; white-on-fill = 5.67:1. F-1 mitigation,
+     pending O-2 brand ruling — revert to --dc-red here to restore #E63946. */
+  --dc-red-fill: 195 42 55; /* #C32A37 */
+
+  /* ---- Apple semantic ---- */
+  --success: 52 199 89; /* #34C759 — fills, icons, dot indicators (≥3:1 UI) */
+  --warning: 255 149 0; /* #FF9500 */
+  --error: 255 59 48; /* #FF3B30 */
+  /* Darkened "on-light" text variants of the semantic colors. Tinted badges
+     (15-percent fill) sit on a near-white wash, so the bright fills above fail
+     4.5:1 as text — these meet AA. Mode-aware: brightened in the dark block
+     where the tint is dark. (C-2) */
+  --success-text: 22 101 52; /* #166534 dark green */
+  --warning-text: 133 77 14; /* #854D0E dark amber */
+  --dc-green-text: 63 98 18; /* #3F6212 dark olive (fresh tag) */
+  --error-text: 193 0 7; /* #C10007 — AA red text on white & error/15 tint */
+
+  /* ---- Neutrals: LIGHT (channels) ---- */
+  --bg-primary: 255 255 255; /* #FFFFFF */
+  --bg-secondary: 242 242 247; /* #F2F2F7 */
+  --bg-tertiary: 255 255 255; /* #FFFFFF */
+
+  /* ---- Mode-aware translucent tokens (alpha baked in) ---- */
+  --separator: rgba(60, 60, 67, 0.18);
+  /* DESIGN_SYSTEM §2.2 specifies 0.6, but that yields 3.44:1 on white — below
+     the §2.4-enforced 4.5:1 for text. Bumped to 0.78 (5.63:1) to satisfy AA
+     while staying in the Apple secondary-grey family. Logged in PHASE_LOG. */
+  --text-secondary: rgba(60, 60, 67, 0.78);
+  --text-tertiary: rgba(60, 60, 67, 0.3); /* placeholders/disabled — AA-exempt */
+  --fill-quaternary: rgba(116, 116, 128, 0.08);
+
+  /* ---- shadcn/ui semantic mapping (LIGHT) ---- */
+  --background: var(--bg-primary);
+  --foreground: 0 0 0; /* #000 */
+  --card: var(--bg-tertiary);
+  --card-foreground: 0 0 0;
+  --popover: var(--bg-tertiary);
+  --popover-foreground: 0 0 0;
+  --primary: var(--dc-red);
+  --primary-foreground: 255 255 255;
+  --secondary: var(--bg-secondary);
+  --secondary-foreground: 0 0 0;
+  --muted: var(--bg-secondary);
+  --muted-foreground: 110 110 115; /* #6E6E73 solid ≈ Apple secondary label */
+  --accent: var(--bg-secondary);
+  --accent-foreground: 0 0 0;
+  --destructive: var(--error);
+  --destructive-foreground: 255 255 255;
+  --border: 198 198 200; /* #C6C6C8 Apple separator (opaque) */
+  --input: 198 198 200;
+  --ring: var(--dc-red);
+
+  --radius: 0.75rem; /* 12px — buttons & inputs (DESIGN_SYSTEM §4.3) */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* ---- Neutrals: DARK (channels) ---- */
+    --bg-primary: 0 0 0; /* #000000 */
+    --bg-secondary: 28 28 30; /* #1C1C1E */
+    --bg-tertiary: 44 44 46; /* #2C2C2E */
+
+    /* ---- Mode-aware translucent tokens (DARK) ---- */
+    --separator: rgba(84, 84, 88, 0.4);
+    --text-secondary: rgba(235, 235, 245, 0.6);
+    --text-tertiary: rgba(235, 235, 245, 0.3);
+    --fill-quaternary: rgba(118, 118, 128, 0.16);
+
+    /* ---- shadcn/ui semantic mapping (DARK) ---- */
+    --foreground: 255 255 255; /* #FFF */
+    --card-foreground: 255 255 255;
+    --popover-foreground: 255 255 255;
+    --secondary-foreground: 255 255 255;
+    --muted-foreground: 152 152 159; /* #98989F solid ≈ dark secondary label */
+    --accent-foreground: 255 255 255;
+    --border: 56 56 58; /* #38383A */
+    --input: 56 56 58;
+
+    /* ---- Mode-aware red/semantic TEXT tokens (DARK) ---- */
+    /* On black, the dark light-mode values fail; brighten them. The badge tints
+       are dark in dark mode, so bright text reads 7–8:1. (C-2) */
+    --dc-red-text: 255 107 107; /* #FF6B6B — AA red text on black */
+    --success-text: 48 209 88; /* #30D158 */
+    --warning-text: 255 159 10; /* #FF9F0A */
+    --dc-green-text: 168 213 138; /* #A8D58A */
+    --error-text: 255 107 107; /* #FF6B6B */
+    /* brand --dc-red, --dc-red-fill, --success/warning/error fills stay constant */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    /* Honor iOS safe areas at the document edges. */
+    min-height: 100dvh;
+  }
+
+  /* Visible focus ring on every interactive element (DESIGN_SYSTEM §9). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Tabular numerals utility for animating numbers without layout shift. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Safe-area padding helpers for the bottom tab bar / notch. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .min-h-screen-safe {
+    min-height: calc(100dvh - env(safe-area-inset-bottom));
+  }
+}
+
+/* Global reduced-motion safeguard (DESIGN_SYSTEM §7.3). Framer Motion also
+   honors this via useReducedMotion in component code. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
