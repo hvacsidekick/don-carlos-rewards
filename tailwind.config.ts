@@ -139,10 +139,18 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        // DESIGN_SYSTEM §5.1 — subtle dc-yellow glow pulse on the eligible CTA.
+        // Animates box-shadow only on an idle element (not during interaction),
+        // so it stays off the input-latency path; honored only when motion is on.
+        "glow-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(249,199,79,0.0)" },
+          "50%": { boxShadow: "0 0 16px 2px rgba(249,199,79,0.55)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "glow-pulse": "glow-pulse 2.4s ease-in-out infinite",
       },
     },
   },
