@@ -343,6 +343,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      redeem_points_for: {
+        Args: { pts: number; target: string }
+        Returns: {
+          amount_cents: number | null
+          created_at: string
+          id: string
+          notes: string | null
+          points_balance_after: number
+          points_delta: number
+          staff_id: string | null
+          transaction_type: Database["public"]["Enums"]["tx_type"]
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       rotate_qr_token: { Args: { target?: string }; Returns: string }
       write_audit: {
         Args: { action: string; delta: number; reason: string; target: string }

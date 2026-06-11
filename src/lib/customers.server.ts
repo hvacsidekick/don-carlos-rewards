@@ -53,12 +53,32 @@ function decodeCursor(raw: string): CursorKey | null {
 }
 
 /**
- * Escape PostgREST `ilike` wildcards in a user-supplied search term so a literal
- * `%` or `_` (or the PostgREST list delimiter `,`) can't widen or break the
- * pattern. The term is wrapped in `%…%` by the caller for a contains-match.
+ * Build the value side of an `ilike.<value>` operand for a PostgREST `.or()`
+ * filter string, for a contains-match on a user-supplied term.
+ *
+ * Two distinct escaping layers are at play and were previously conflated:
+ *
+ *  1. LIKE pattern: a literal `%`, `_` or `\` in the term must be backslash-escaped
+ *     so it matches literally instead of acting as a wildcard. We add `%…%` around
+ *     the escaped term for the contains-match.
+ *
+ *  2. PostgREST `.or()` tokenizer: the reserved chars `,`, `(`, `)` (and `.`)
+ *     delimit the filter list/operator syntax. Backslash-escaping them (the old
+ *     approach) does NOT work — PostgREST treats the backslash as a literal char,
+ *     so a search for `a,b` broke the filter or matched the wrong rows. The correct
+ *     fix is to WRAP the whole value in double quotes; PostgREST then takes the
+ *     quoted span verbatim. Inside the quotes a literal `"` or `\` must itself be
+ *     backslash-escaped for the tokenizer.
+ *
+ * Order matters: LIKE-escape first (operates on the raw term), then wrap+quote.
  */
-function escapeLike(term: string): string {
-  return term.replace(/[\\%_,()]/g, "\\$&");
+function ilikeContainsValue(term: string): string {
+  // 1) LIKE-escape: backslash before \, %, _ so they match literally.
+  const likeEscaped = term.replace(/[\\%_]/g, "\\$&");
+  const pattern = `%${likeEscaped}%`;
+  // 2) PostgREST quote-escape: \ and " inside the double-quoted value.
+  const quoteEscaped = pattern.replace(/[\\"]/g, "\\$&");
+  return `"${quoteEscaped}"`;
 }
 
 /**
@@ -89,9 +109,11 @@ export async function getCustomersPage(input: {
 
   const search = input.search?.trim();
   if (search) {
-    const pattern = `%${escapeLike(search)}%`;
+    // Value is LIKE-escaped and double-quoted so reserved chars (`,()`) in the
+    // search term don't break the `.or()` tokenizer (see ilikeContainsValue).
+    const value = ilikeContainsValue(search);
     // Match on display name OR email (contains, case-insensitive).
-    query = query.or(`display_name.ilike.${pattern},email.ilike.${pattern}`);
+    query = query.or(`display_name.ilike.${value},email.ilike.${value}`);
   }
 
   if (input.cursor) {

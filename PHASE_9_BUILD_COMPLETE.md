@@ -217,3 +217,119 @@ Routes present: /analytics, /customers, /customers/[id], /scan (all ƒ dynamic).
   live update after an admin scan/adjust is a Phase-4 realtime concern; gates (tsc/lint/
   build) and DB-level RPC behaviour are verified, but no Playwright/manual click-through
   was performed in this worktree. Recommend the Verifier exercise the flows in-browser.
+
+---
+
+# FIXER — post-audit defect closure (A− → defects closed)
+
+Branch `phase/9-admin`. The independent auditor graded Phase 9 **A− / APPROVED** and listed
+three defects to close before production (MAJOR-1/D-1, MINOR-1, MINOR-2). All three are fixed
+surgically below; NIT-1/NIT-2 left as-is per scope. Live dev project: `uxgcyvexeehvhtuhmztc`.
+
+## FIX 1 — MAJOR-1 / D-1: redeem-on-behalf now writes a real `redeem` ledger row
+
+**Defect:** `redeemOnBehalfAction` debited the target via `adjust_points(-threshold)`, so in-person
+redemptions landed as `transaction_type='adjustment'` — invisible to `admin_analytics().redemptions`,
+to `points_redeemed`, and to `profiles.total_redemptions`.
+
+**Fix:**
+- New migration `supabase/migrations/20260611050000_redeem_points_for.sql` defining
+  `public.redeem_points_for(target uuid, pts integer) returns public.transactions`.
+  It mirrors `redeem_points` exactly — atomic floor via `WHERE points_balance >= pts` (row-locked,
+  never over-debits / goes negative), `total_redemptions++`, a `redeem` ledger row with
+  `points_delta = -pts` — but debits the **target** (not `auth.uid()`) and, like the other admin
+  RPCs, writes `write_audit('redeem_points_for', target, -pts, …)` with the admin as actor.
+- Security pattern copied verbatim from the existing admin RPCs: `security definer`,
+  `set search_path = public`, FIRST statement
+  `if not public.is_admin(auth.uid()) then raise exception 'not authorized' using errcode='42501'`,
+  and `revoke all … from public, anon, authenticated; grant execute … to authenticated;`.
+  P0001 on insufficient balance, P0002 on unknown user, 22023 on invalid amount.
+- `src/actions/admin.ts` repointed from `adjust_points(-threshold)` to
+  `redeem_points_for(target, pts=threshold)`. `requireAdmin()`, Zod validation, the server-side
+  config read and the eligibility re-check are all retained (defense in depth; the RPC guard is the
+  atomic source of truth). `friendlyRedeemError` already maps 42501/P0001.
+- `src/lib/database.types.ts` regenerated — adds the `redeem_points_for` RPC entry (only change).
+
+**Applied live** (`apply_migration` → `{"success":true}`) and **proven** with seeded test users
+(admin / plain-user / target balance 100), impersonated via `request.jwt.claims.sub` under
+`role authenticated`:
+
+| Assertion | Result |
+|---|---|
+| (a) non-admin → `redeem_points_for(target, 50)` | `sqlstate=42501` "not authorized"; balance 100→100, total_redemptions 0→0 (no mutation) |
+| (b) admin redeem-on-behalf of target (50) | `transaction_type='redeem'`, `points_delta=-50`, `points_balance_after=50`, balance 100→50, `total_redemptions` 0→1, `staff_id`=admin, audit row `action=redeem_points_for actor=admin delta=-50` |
+| (c) admin redeem 100 from 50-balance target | `sqlstate=P0001` "insufficient balance"; balance 50→50, total_redemptions 1→1, tx count 1→1, audit count 1→1 (no mutation, atomic rollback) |
+
+**Cleanup:** all test rows removed (transactions/audit_log/profiles/auth.users/auth.identities);
+DB verified back to baseline exactly — `profiles=1, tx=6, audit_log=0, sum(points_balance)=70`,
+zero `rpf9-` residue.
+
+## FIX 2 — MINOR-1: PostgREST search escaping (`src/lib/customers.server.ts`)
+
+**Defect:** `escapeLike` backslash-escaped the PostgREST-reserved chars `, ( )`. Backslash works for
+the ILIKE pattern but NOT for the `.or()` tokenizer — a comma search threw a parse error and a paren
+search returned wrong/empty rows.
+
+**Fix:** replaced `escapeLike` with `ilikeContainsValue(term)` that separates the two escaping layers:
+(1) LIKE-escape `\ % _` so wildcards stay literal, wrap in `%…%`; (2) **double-quote** the whole value
+and backslash-escape any embedded `"`/`\` for the PostgREST tokenizer (`ilike."%a,b%"`). Reserved chars
+inside the quoted span are taken verbatim — no backslash.
+
+**Verified live against PostgREST** (signed-in admin via supabase-js, seeded `Doe, John` / `Acme (West)` /
+`Plain Name`):
+
+| Search | NEW (fixed) | OLD (buggy) |
+|---|---|---|
+| `Doe, John` (comma) | 1 row `["Doe, John"]`, no error | **ERROR** "failed to parse logic tree" |
+| `(West)` (parens) | 1 row `["Acme (West)"]` | 0 rows (backslash leaked into pattern) |
+| `Plain` | 1 row `["Plain Name"]` | — |
+| `%` (literal wildcard) | 0 rows (correctly escaped, no match-all) | — |
+
+Test rows cleaned up; baseline restored.
+
+## FIX 3 — MINOR-2: `points_outstanding` liability KPI excludes admins
+
+**Defect:** `admin_analytics().points_outstanding` summed `points_balance` over ALL profiles including
+admins. (`admin_analytics_extended` does NOT compute this KPI — only the base RPC does.)
+
+**Fix:** migration `supabase/migrations/20260611050100_analytics_points_outstanding_exclude_admins.sql`
+adds `where not is_admin`, consistent with `total_customers` / `top_customers`. Corrected formula:
+
+```
+points_outstanding = Σ points_balance from public.profiles where not is_admin
+```
+
+Applied live. Re-verified via the RPC (transient admin): `points_outstanding = 70`, equal to the
+customers-only ground truth (70). The other four KPIs are byte-identical to mig 20260610011508.
+
+## Advisors (post-change)
+
+- **Security:** 8× `0029 authenticated_security_definer_function_executable` WARN — one per admin RPC,
+  now including `redeem_points_for` (the SAME expected/justified lint the other 7 carry: re-checks
+  `is_admin` internally; SECURITY DEFINER required to write the ledger under RLS). Plus the pre-existing
+  unrelated `auth_leaked_password_protection` WARN. **No new lint category, no error-level lints.**
+- **Performance:** only 2 pre-existing INFO `unused_index` notices (audit_log_created_idx,
+  profiles_qr_token_idx) — unrelated.
+
+## Gates (clean `.next`, this worktree)
+
+```
+$ rm -rf .next && npx tsc --noEmit
+TSC_EXIT=0
+
+$ npm run lint
+✔ No ESLint warnings or errors
+LINT_EXIT=0
+(only the benign nested-worktree "multiple lockfiles" workspace-root inference — environmental.)
+
+$ rm -rf .next && npm run build
+✓ Compiled successfully in 15.3s
+✓ Generating static pages (23/23)
+BUILD_EXIT=0
+Routes present: /analytics, /customers, /customers/[id], /scan (all ƒ dynamic).
+```
+(Edge-runtime `process.version` warning + webpack big-string cache warnings are pre-existing
+Supabase-SSR noise, not Phase-9 code.)
+
+**Not closed (out of scope):** NIT-1 (duplicated cursor codec in `customers.server.ts:250`) and
+NIT-2 (unused `analyticsWindowSchema`) were left untouched per the Fixer brief.

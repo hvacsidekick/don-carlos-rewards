@@ -117,15 +117,19 @@ function friendlyRedeemError(error: { code?: string; message?: string }): string
  * Redeem one reward ON BEHALF of an in-person customer.
  *
  * NOTE on identity: `redeem_points(pts)` redeems for `auth.uid()` — the SESSION
- * user. To redeem for ANOTHER user as staff, we instead use `adjust_points`,
- * which is the admin-authorized, audited path that can debit a target customer.
- * We read the canonical `rewards_config.redeem_threshold` server-side (never
- * client-chosen) and apply a negative adjustment of that size, reason-tagged so
- * the action is fully attributable in the ledger + audit log. The RPC floors at
- * 0 and writes the audit entry with the admin as actor.
+ * user. To redeem for ANOTHER user as staff, we use the admin-authorized,
+ * audited `redeem_points_for(target, pts)` RPC. It writes a real
+ * `transaction_type = 'redeem'` ledger row (so in-person redemptions count in the
+ * redemption KPIs) and increments `total_redemptions` — unlike a generic
+ * `adjustment`. We read the canonical `rewards_config.redeem_threshold`
+ * server-side (never client-chosen) and pass it as the debit amount; the RPC's
+ * `points_balance >= pts` guard makes the debit atomic, never over-debits, and
+ * raises P0001 on insufficient balance. It writes the audit entry with the admin
+ * as actor.
  *
- * Eligibility (balance ≥ threshold) is re-checked server-side BEFORE the debit
- * so we never push a customer's redeemable balance below a full reward.
+ * Eligibility (balance ≥ threshold) is also re-checked server-side BEFORE the
+ * debit so we surface a friendly message rather than relying on the RPC raise;
+ * the RPC guard remains the atomic source of truth.
  */
 export async function redeemOnBehalfAction(input: {
   userId: string;
@@ -168,11 +172,12 @@ export async function redeemOnBehalfAction(input: {
     return { ok: false, error: "This customer doesn't have enough points to redeem." };
   }
 
-  // Debit via the admin-authorized, audited adjustment path (negative delta).
-  const { data, error } = await supabase.rpc("adjust_points", {
+  // Debit via the admin-authorized, audited redeem path. This writes a real
+  // `redeem` ledger row and increments total_redemptions (vs a generic adjustment),
+  // so in-person redemptions are visible to the redemption KPIs.
+  const { data, error } = await supabase.rpc("redeem_points_for", {
     target: userId,
-    delta: -threshold,
-    reason: "Reward redeemed in person (staff)",
+    pts: threshold,
   });
 
   if (error) {
