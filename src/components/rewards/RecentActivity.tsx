@@ -1,35 +1,17 @@
 import Link from "next/link";
-import { ArrowUpRight, Gift, Pencil } from "lucide-react";
 
 import { Mascot } from "@/components/common/Mascot";
-import type { Tables } from "@/lib/database.types";
-import { formatDelta, formatPoints, formatTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { TransactionRow } from "@/components/transactions/TransactionRow";
+import type { TransactionListItem } from "@/lib/transactions";
 
 /**
- * RecentActivity (PHASE_4_TASK §4.8, D4-5) — the minimal inline last-3
- * transactions peek. A lightweight, read-only list; the grouped/paginated
- * history page lands in Phase 6 (the row markup here is kept extractable so
- * Phase 6 can promote it).
- *
- * State is conveyed by icon + sign + color (never color alone — DESIGN_SYSTEM
- * §9): earn = green up-arrow, redeem = brand-red gift, adjustment = pencil.
+ * RecentActivity (PHASE_4_TASK §4.8, D4-5) — the inline last-3 transactions peek
+ * on the dashboard. A lightweight, read-only list; the grouped/paginated history
+ * lives at `/transactions` (Phase 6), reached via "See all". Each row is the
+ * shared {@link TransactionRow}, so the peek and the full history stay identical
+ * (icon + sign + color state, never color alone — DESIGN_SYSTEM §9).
  */
-type Tx = Pick<
-  Tables<"transactions">,
-  "id" | "transaction_type" | "points_delta" | "points_balance_after" | "created_at" | "notes"
->;
-
-const TYPE_META: Record<
-  Tables<"transactions">["transaction_type"],
-  { label: string; Icon: typeof ArrowUpRight; tint: string }
-> = {
-  earn: { label: "Earned points", Icon: ArrowUpRight, tint: "text-dc-green-text" },
-  redeem: { label: "Redeemed reward", Icon: Gift, tint: "text-dc-red-text" },
-  adjustment: { label: "Adjustment", Icon: Pencil, tint: "text-fg-secondary" },
-};
-
-export function RecentActivity({ items }: { items: Tx[] }) {
+export function RecentActivity({ items }: { items: TransactionListItem[] }) {
   if (items.length === 0) {
     return (
       <section aria-labelledby="recent-activity-title" className="flex flex-col gap-3">
@@ -58,44 +40,10 @@ export function RecentActivity({ items }: { items: Tx[] }) {
         </Link>
       </div>
 
-      <ul className="overflow-hidden rounded-2xl bg-surface-tertiary shadow-card dark:shadow-card-dark">
-        {items.map((tx, i) => {
-          const meta = TYPE_META[tx.transaction_type];
-          const positive = tx.points_delta > 0;
-          return (
-            <li
-              key={tx.id}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3",
-                i > 0 && "border-t border-separator",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid size-9 shrink-0 place-items-center rounded-full bg-fill-quaternary",
-                  meta.tint,
-                )}
-              >
-                <meta.Icon className="size-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-body-emph text-foreground">{meta.label}</p>
-                <p className="text-footnote text-fg-secondary">
-                  {formatTime(tx.created_at)}
-                  {tx.notes ? ` · ${tx.notes}` : ` · Balance ${formatPoints(tx.points_balance_after)}`}
-                </p>
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 text-body-emph tabular-nums",
-                  positive ? "text-dc-green-text" : "text-error-text",
-                )}
-              >
-                {formatDelta(tx.points_delta)}
-              </span>
-            </li>
-          );
-        })}
+      <ul className="divide-y divide-separator overflow-hidden rounded-2xl bg-surface-tertiary shadow-card dark:shadow-card-dark">
+        {items.map((tx) => (
+          <TransactionRow key={tx.id} tx={tx} />
+        ))}
       </ul>
     </section>
   );
