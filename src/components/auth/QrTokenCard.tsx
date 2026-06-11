@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, RefreshCw, QrCode } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,14 +15,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { QRDisplay } from "@/components/qr/QRDisplay";
 import { maskQrToken } from "@/lib/qr";
 import { rotateQrTokenAction } from "@/actions/auth";
 
 /**
- * Profile QR-token panel (DESIGN_SYSTEM.md §5.5 references; full QR image is
- * Phase 5). Shows the opaque, rotatable token (masked) and lets the user rotate
- * it if compromised. The token is never the user id and carries no PII
- * (BLUEPRINT.md §1).
+ * Rewards-code card (DESIGN_SYSTEM.md §5.5). Renders the customer's scannable QR
+ * (white tile, always — §10) over the opaque, rotatable `qr_token`, plus the
+ * masked token text and a tertiary "Rotate code" control. The QR encodes only
+ * the token — no PII (BLUEPRINT.md §1).
+ *
+ * When the user rotates, the new token flows straight into `QRDisplay`, so the
+ * rendered QR updates in place (the old code stops working immediately).
  */
 export function QrTokenCard({ initialToken }: { initialToken: string }) {
   const [token, setToken] = React.useState(initialToken);
@@ -43,30 +47,21 @@ export function QrTokenCard({ initialToken }: { initialToken: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-separator bg-surface-tertiary p-6 shadow-card dark:shadow-card-dark">
-      <div className="flex items-center gap-3">
-        <span
-          className="grid size-10 shrink-0 place-items-center rounded-xl bg-dc-red/10 text-dc-red"
-          aria-hidden="true"
-        >
-          <QrCode className="size-5" />
-        </span>
-        <div className="flex flex-col">
-          <h3 className="text-body-emph text-foreground">Your rewards code</h3>
-          <p className="text-footnote text-fg-secondary">
-            Staff scan this to add points. A scannable QR arrives soon.
-          </p>
-        </div>
-      </div>
+    <div className="flex flex-col items-center gap-4 rounded-2xl border border-separator bg-surface-tertiary p-6 shadow-card dark:shadow-card-dark">
+      <QRDisplay token={token} />
 
-      <p className="rounded-xl bg-surface-secondary px-4 py-3 font-mono text-footnote tabular-nums text-fg-secondary">
+      <p className="text-center text-footnote text-fg-secondary">
+        Show this to staff at checkout to earn points.
+      </p>
+
+      <p className="rounded-xl bg-surface-secondary px-4 py-2 font-mono text-caption tabular-nums text-fg-secondary">
         <span className="sr-only">Rewards code, partially hidden for privacy: </span>
         {maskQrToken(token)}
       </p>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="tertiary" className="self-start">
+          <Button variant="tertiary">
             <RefreshCw className="size-5" aria-hidden="true" />
             Rotate code
           </Button>
