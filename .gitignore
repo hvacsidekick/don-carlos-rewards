@@ -48,3 +48,5 @@ yarn-error.log*
 
 # claude code orchestration state (worktrees, session config)
 .claude/
+
+.vercel
