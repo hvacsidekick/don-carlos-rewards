@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { encodeCursor, decodeCursor } from "@/lib/cursor";
 import {
   TRANSACTIONS_PAGE_SIZE,
   type TransactionFilter,
@@ -23,32 +24,6 @@ import {
  * otherwise surface the GLOBAL feed here — so we scope explicitly (defense in
  * depth, same rationale as the dashboard's recent-activity peek).
  */
-
-type CursorKey = { c: string; i: string };
-
-/** Encode the last row's sort key into an opaque, URL-safe cursor string. */
-function encodeCursor(row: { created_at: string; id: string }): string {
-  const payload: CursorKey = { c: row.created_at, i: row.id };
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-}
-
-/** Decode a cursor; returns null for anything malformed (treated as "from the top"). */
-function decodeCursor(raw: string): CursorKey | null {
-  try {
-    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as CursorKey).c === "string" &&
-      typeof (parsed as CursorKey).i === "string"
-    ) {
-      return { c: (parsed as CursorKey).c, i: (parsed as CursorKey).i };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Fetch one page of the signed-in user's transaction history.

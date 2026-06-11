@@ -24,9 +24,31 @@ import {
  * IMPORTANT: the returned `supabaseResponse` carries the refreshed Set-Cookie
  * headers. When redirecting we copy those cookies onto the redirect response so
  * the refreshed session is not dropped.
+ *
+ * SECURITY (Phase 10): `security.nonce`/`security.csp` (from the root middleware)
+ * are applied here — the nonce is forwarded on the REQUEST headers so Next.js
+ * nonces its own inline scripts, and the CSP is set on EVERY response this
+ * function can return (the pass-through response AND each redirect).
  */
-export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  let supabaseResponse = NextResponse.next({ request });
+export async function updateSession(
+  request: NextRequest,
+  security?: { nonce: string; csp: string },
+): Promise<NextResponse> {
+  // Forward the nonce on the request headers so Next.js applies it to its inline
+  // bootstrap scripts (and Server Components can read it via headers()).
+  const requestHeaders = new Headers(request.headers);
+  if (security) {
+    requestHeaders.set("x-nonce", security.nonce);
+    // Next.js reads this request header to auto-nonce its inline scripts.
+    requestHeaders.set("Content-Security-Policy", security.csp);
+  }
+
+  const applyCsp = (res: NextResponse): NextResponse => {
+    if (security) res.headers.set("Content-Security-Policy", security.csp);
+    return res;
+  };
+
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient<Database>(
     clientEnv.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,7 +60,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -62,7 +84,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     const res = NextResponse.redirect(url);
     // Preserve refreshed auth cookies on the redirect.
     supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c));
-    return res;
+    return applyCsp(res);
   };
 
   // 1. Unauthenticated user hitting a protected route → login (preserve `next`).
@@ -73,7 +95,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     url.searchParams.set("next", `${pathname}${search}`);
     const res = NextResponse.redirect(url);
     supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c));
-    return res;
+    return applyCsp(res);
   }
 
   // 2. Authenticated user.
@@ -97,5 +119,5 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     }
   }
 
-  return supabaseResponse;
+  return applyCsp(supabaseResponse);
 }

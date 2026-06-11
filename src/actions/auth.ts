@@ -2,9 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { createClient } from "@/lib/supabase/server";
 import { siteUrl, safeNextPath } from "@/lib/site-url";
+import { hasRecoveryAmr, type AmrClaim } from "@/lib/recovery-amr";
+import { rateLimiter, AUTH_RATE_LIMIT, clientIpFromHeaders } from "@/lib/rate-limit";
+import { friendlyAuthError } from "@/lib/auth-errors";
 import type { ActionResult } from "@/lib/action-result";
 import {
   signupSchema,
@@ -26,32 +30,45 @@ import {
  * or `redirect()`s on success.
  */
 
-/** Map a raw Supabase auth error to safe, human copy (no codes/stack leak). */
-function friendlyAuthError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("invalid login credentials")) return "Incorrect email or password.";
-  if (m.includes("email not confirmed"))
-    return "Please confirm your email first — check your inbox for the link.";
-  if (m.includes("user already registered") || m.includes("already been registered"))
-    return "An account with this email already exists. Try signing in.";
-  if (m.includes("rate limit") || m.includes("too many"))
-    return "Too many attempts. Please wait a moment and try again.";
-  // Email delivery failures (SMTP not configured, rate-limited, etc.)
-  if ((m.includes("sending") || m.includes("send")) && m.includes("email"))
-    return "We couldn't send your confirmation email right now. Please try again shortly.";
-  if (m.includes("password")) return "That password doesn't meet the requirements.";
-  return "Something went wrong. Please try again.";
+/**
+ * Per-IP rate-limit gate for an auth endpoint (PLAN.md §Phase 10 criterion 3;
+ * BLUEPRINT.md §12 — 5/min/IP). Returns a friendly `ActionResult` error when the
+ * limit is exceeded (the 6th attempt in the window), else null to proceed. The
+ * `bucket` namespaces the limit per action so login/signup/reset don't share a
+ * counter. Headers come from `next/headers` (Vercel sets `x-forwarded-for`).
+ *
+ * Backed by the in-memory limiter (single-instance correct); swap to Upstash/KV
+ * for prod multi-instance enforcement — see `lib/rate-limit.ts`.
+ */
+async function authRateLimit(bucket: string): Promise<ActionResult | null> {
+  const ip = clientIpFromHeaders(await headers());
+  const result = await rateLimiter.check(`auth:${bucket}:${ip}`, AUTH_RATE_LIMIT);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: "Too many attempts. Please wait a minute and try again.",
+    };
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sign up (email + password, with email confirmation)
 // ─────────────────────────────────────────────────────────────────────────────
-export async function signUpAction(input: SignupInput): Promise<ActionResult> {
+export async function signUpAction(input: SignupInput, next?: string): Promise<ActionResult> {
+  const limited = await authRateLimit("signup");
+  if (limited) return limited;
+
   const parsed = signupSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid details." };
   }
   const { email, password, displayName } = parsed.data;
+
+  // Preserve a sanitized `next` across the email-confirmation round-trip (closes
+  // Phase 3 audit m-5 — `next` was previously dropped on the signup path). The
+  // callback exchanges the code, then lands on this in-app path.
+  const dest = safeNextPath(next);
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
@@ -63,7 +80,7 @@ export async function signUpAction(input: SignupInput): Promise<ActionResult> {
       data: { full_name: displayName },
       // Default email template (`{{ .ConfirmationURL }}`) redirects here after
       // verify; the callback exchanges the PKCE code for a session.
-      emailRedirectTo: siteUrl("/auth/callback?next=/dashboard"),
+      emailRedirectTo: siteUrl(`/auth/callback?next=${encodeURIComponent(dest)}`),
     },
   });
 
@@ -83,6 +100,9 @@ export async function signInAction(
   input: LoginInput,
   next?: string,
 ): Promise<ActionResult> {
+  const limited = await authRateLimit("login");
+  if (limited) return limited;
+
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid details." };
@@ -116,6 +136,9 @@ export async function signOutAction(): Promise<void> {
 export async function resetPasswordAction(
   input: ResetRequestInput,
 ): Promise<ActionResult> {
+  const limited = await authRateLimit("reset");
+  if (limited) return limited;
+
   const parsed = resetRequestSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a valid email." };
@@ -153,16 +176,30 @@ export async function updatePasswordAction(input: ResetInput): Promise<ActionRes
     };
   }
 
-  // NOTE (Phase 10 carry-forward — re-auth hardening, was audit finding m-1):
-  // We intentionally do NOT gate this on a "recovery" AMR here. `amr` is a claim
-  // inside the decoded access-token JWT (read via getAuthenticatorAssuranceLevel
-  // / payload.amr), NOT a field on the Session object — reading `session.amr`
-  // returns undefined and would reject EVERY reset, breaking the recovery flow.
-  // Implement the recovery-session gate in Phase 10 once it can be end-to-end
-  // tested (needs SMTP or a real service-role key to mint a recovery session):
-  // decode `session.access_token`, check `amr` for method "recovery" (handle
-  // both string[] and AMREntry[] formats), OR stamp a short-lived recovery
-  // marker cookie from /auth/callback. Tracked in PHASE_LOG.md Phase 3 → P10-CF.
+  // P10-CF-1 — recovery re-auth gate (closes Phase 3 audit m-1, done correctly).
+  // Only a session minted from a password-recovery link (or a freshly re-authed
+  // session) may set a new password — this prevents a hijacked/long-lived
+  // session from silently changing the password (CWE-620). The `amr` claim that
+  // proves "recovery" lives on the DECODED access-token JWT, NOT on the Session
+  // object — so we read it via `getClaims()` (the bug last time was reading the
+  // nonexistent `session.amr`). `hasRecoveryAmr` handles both the `string[]` and
+  // `AMREntry[]` claim shapes and fails closed on a missing/malformed claim.
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !claimsData) {
+    return {
+      ok: false,
+      error: "Your reset link has expired. Request a new one and try again.",
+    };
+  }
+  const amr = (claimsData.claims as { amr?: AmrClaim }).amr;
+  if (!hasRecoveryAmr(amr)) {
+    return {
+      ok: false,
+      error:
+        "For your security, password changes must use a fresh reset link. Request a new one from “Forgot password”.",
+    };
+  }
+
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) {
     return { ok: false, error: friendlyAuthError(error.message) };

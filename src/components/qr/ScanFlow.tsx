@@ -73,6 +73,11 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
   const currentTokenRef = React.useRef<string | null>(null);
   const recentlyScannedRef = React.useRef<{ token: string; at: number } | null>(null);
 
+  // P10-CF-3: one idempotency key per opened confirm sheet. Reused if the user
+  // re-taps "Add points" (or a flaky-network action retries), so the customer is
+  // credited exactly once even if two requests reach the server.
+  const idempotencyKeyRef = React.useRef<string | null>(null);
+
   const reArmScanner = React.useCallback(() => {
     setResetSignal((n) => n + 1);
   }, []);
@@ -83,6 +88,8 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
     setResolving(false);
     if (res.ok) {
       currentTokenRef.current = token;
+      // Fresh idempotency key for this add (one per resolved customer/sheet).
+      idempotencyKeyRef.current = crypto.randomUUID();
       setCustomer(res.data);
       setAmount("");
       setAmountError(null);
@@ -164,6 +171,7 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
     const res = await addPointsAction({
       target: customer.id,
       amountCents: amountCents ?? undefined,
+      idempotencyKey: idempotencyKeyRef.current ?? undefined,
     });
     setSubmitting(false);
 
