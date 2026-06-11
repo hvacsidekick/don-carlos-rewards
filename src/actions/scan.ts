@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { addPointsInputSchema, qrTokenSchema } from "@/schemas/scan";
 import { pointsForAmount } from "@/lib/points";
+import { requireAdmin } from "@/lib/admin-guard";
 import type { ActionResult } from "@/lib/action-result";
 
 /**
@@ -34,36 +35,6 @@ export type AddPointsResult = {
   newBalance: number;
   transactionId: string;
 };
-
-/**
- * Re-derive admin status from the session, server-side. Returns the verified
- * user id when the caller is a signed-in admin, or an `ActionResult` error to
- * return as-is otherwise. Centralised so every action enforces it identically.
- */
-async function requireAdmin(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "You are not signed in." };
-  }
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", user.id)
-    .single();
-
-  if (error || !profile?.is_admin) {
-    // Same opaque copy whether they're a non-admin or the lookup failed — never
-    // confirm to a non-admin that the boundary exists.
-    return { ok: false, error: "You're not authorized to do that." };
-  }
-
-  return { ok: true, userId: user.id };
-}
 
 /**
  * Map a raw `add_points` RPC error to safe, human copy. The RPC raises:

@@ -299,6 +299,7 @@ export type Database = {
         }
       }
       admin_analytics: { Args: never; Returns: Json }
+      admin_analytics_extended: { Args: { days?: number }; Returns: Json }
       is_admin: { Args: { uid: string }; Returns: boolean }
       promote_to_admin: {
         Args: { target_email: string }
