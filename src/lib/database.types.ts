@@ -299,6 +299,7 @@ export type Database = {
         }
       }
       admin_analytics: { Args: never; Returns: Json }
+      admin_analytics_extended: { Args: { days?: number }; Returns: Json }
       is_admin: { Args: { uid: string }; Returns: boolean }
       promote_to_admin: {
         Args: { target_email: string }
@@ -324,6 +325,26 @@ export type Database = {
       }
       redeem_points: {
         Args: { pts: number }
+        Returns: {
+          amount_cents: number | null
+          created_at: string
+          id: string
+          notes: string | null
+          points_balance_after: number
+          points_delta: number
+          staff_id: string | null
+          transaction_type: Database["public"]["Enums"]["tx_type"]
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      redeem_points_for: {
+        Args: { pts: number; target: string }
         Returns: {
           amount_cents: number | null
           created_at: string
