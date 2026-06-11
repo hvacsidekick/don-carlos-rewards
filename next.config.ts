@@ -1,8 +1,21 @@
 import type { NextConfig } from "next";
 
+import { STATIC_SECURITY_HEADERS } from "./src/lib/security-headers";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Security headers (CSP/HSTS/etc.) are configured in Phase 10 — Security Hardening.
+  // Static security headers (HSTS, nosniff, frame, referrer, permissions) on
+  // EVERY response (Phase 10 criterion 4). The per-request CSP nonce is set in
+  // middleware (`src/middleware.ts`) since it must vary per request — see
+  // `src/lib/security-headers.ts` for the full directive rationale.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: STATIC_SECURITY_HEADERS,
+      },
+    ];
+  },
   images: {
     // Phase 7 (Menu): allow `next/image` optimization of menu photos served from
     // Supabase Storage. `image_url` is nullable in the seed (no real photography

@@ -1,9 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { createClient } from "@/lib/supabase/server";
 import { addPointsInputSchema, qrTokenSchema } from "@/schemas/scan";
 import { pointsForAmount } from "@/lib/points";
 import { requireAdmin } from "@/lib/admin-guard";
+import { rateLimiter, ADD_POINTS_RATE_LIMIT } from "@/lib/rate-limit";
 import type { ActionResult } from "@/lib/action-result";
 
 /**
@@ -113,11 +116,26 @@ export async function addPointsAction(input: {
   amountCents?: number;
   points?: number;
   note?: string;
+  /**
+   * P10-CF-3 idempotency key. The client generates ONE key per intended add and
+   * reuses it across retries of the same submit, so a flaky-network Server Action
+   * retry (or a double-fire that beats the button-disable) credits exactly once.
+   * A malformed/absent key gets a fresh server-generated one (still de-dupes the
+   * server-side retry path; the client just loses cross-retry dedupe).
+   */
+  idempotencyKey?: string;
 }): Promise<ActionResult<AddPointsResult>> {
   const supabase = await createClient();
 
   const admin = await requireAdmin(supabase);
   if (!admin.ok) return admin;
+
+  // Throttle add-points per admin (defense against a runaway/abusive loop).
+  // Generous vs auth (staff scan in bursts) — see ADD_POINTS_RATE_LIMIT.
+  const limit = await rateLimiter.check(`add_points:${admin.userId}`, ADD_POINTS_RATE_LIMIT);
+  if (!limit.ok) {
+    return { ok: false, error: "You're adding points very quickly. Please wait a moment." };
+  }
 
   const parsed = addPointsInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -126,7 +144,10 @@ export async function addPointsAction(input: {
       error: parsed.error.issues[0]?.message ?? "Please check the amount and try again.",
     };
   }
-  const { target, amountCents, points, note } = parsed.data;
+  const { target, amountCents, points, note, idempotencyKey } = parsed.data;
+  // Reuse the client's key across retries; mint one if absent so the server-side
+  // retry path is still de-duped by the unique index.
+  const idemKey = idempotencyKey ?? randomUUID();
 
   // Resolve the number of points to award.
   let pts: number;
@@ -151,11 +172,15 @@ export async function addPointsAction(input: {
     pts = points as number;
   }
 
-  const { data, error } = await supabase.rpc("add_points", {
+  // P10-CF-3: idempotent earn — a retried/duplicated add with the same key is a
+  // no-op (returns the original row), never a double-credit. The unique index on
+  // (staff_id, user_id, idempotency_key) is the atomic backstop.
+  const { data, error } = await supabase.rpc("add_points_idempotent", {
     target,
     pts,
     amount_cents: amountForLedger,
     note,
+    idem_key: idemKey,
   });
 
   if (error) {

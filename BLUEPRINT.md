@@ -621,22 +621,63 @@ SENTRY_DSN=                         # optional, error monitoring
 ### 10.3 Supabase setup
 - One project per environment (or branch DBs for preview). Apply migrations + seed. Promote first admin via SQL (`update profiles set is_admin=true where email=...`). Enable email confirmation + leaked-password protection. Configure Google + Apple providers with correct redirect URLs.
 
-### 10.4 Security headers (`next.config.ts`)
+### 10.4 Security headers — IMPLEMENTED (Phase 10)
+
+**Split:** static headers in `next.config.ts` `headers()`; the per-request CSP
+(nonce-bearing) in `src/middleware.ts`. Both derive from
+`src/lib/security-headers.ts` (single source, per-directive rationale documented
+there). The nonce is generated per request in middleware, forwarded on the
+request `Content-Security-Policy`/`x-nonce` headers so Next.js auto-nonces its
+own inline bootstrap scripts — letting us **drop `unsafe-inline` from
+`script-src`**. Verified: the CSP-header nonce matches the inline-`<script>`
+nonce and differs per request; the static headers + CSP also ride on middleware
+redirects.
+
+**Exact policy shipped** (one line per directive):
 ```
-Content-Security-Policy: default-src 'self';
-  script-src 'self' 'nonce-<...>';
-  connect-src 'self' https://<project>.supabase.co wss://<project>.supabase.co;
-  img-src 'self' data: blob: https://<supabase-storage> https://*.googleapis.com;
-  frame-src https://www.google.com;            # maps embed
-  style-src 'self' 'unsafe-inline';            # tailwind/shadcn
+Content-Security-Policy:
+  default-src 'self';
+  base-uri 'self';
+  object-src 'none';
+  form-action 'self';
+  frame-ancestors 'none';
+  script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https:;   # NO unsafe-inline; https: ignored by CSP3 when strict-dynamic present
+  style-src 'self' 'unsafe-inline';                                  # ACCEPTED exception: Tailwind/shadcn/Framer set inline styles + style attrs (nonces don't cover style attributes); style injection ≪ script injection
+  img-src 'self' data: blob: https://*.supabase.co;                  # app imgs, next/image blur (data:), blob: downloads, Storage menu photos
   font-src 'self' data:;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co;      # Supabase REST/Auth + Realtime websocket
+  frame-src https://www.google.com;                                  # keyless Maps Embed on /about only
+  worker-src 'self' blob:;                                           # zxing / future SW
+  manifest-src 'self';
+  upgrade-insecure-requests
 Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
 Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: camera=(self)             # scanner only
-X-Frame-Options: DENY  (or frame-ancestors 'none')
+Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), accelerometer=(), gyroscope=(), interest-cohort=()
 ```
-Tune iteratively in Phase 10 — Supabase realtime (wss), Maps (frame-src), and the QR libs each need allowances.
+The only documented relaxations are `style-src 'unsafe-inline'` (style attrs,
+accepted) and the CSP3-ignored `https:` fallback in `script-src`. Runtime
+browser console-violation verification across every page is a Verifier/Phase-11
+task (no full browser here); the policy is correct by construction + curl-proven.
+
+### 10.4a Rate limiting — IMPLEMENTED (Phase 10)
+
+`src/lib/rate-limit-core.ts` (pure, unit-tested) + `src/lib/rate-limit.ts`
+(`server-only` wrapper, singleton, IP helper). Fixed-window limiter:
+- **Auth** (login/signup/reset): 5 / 60s per IP — the **6th attempt in the window
+  is blocked** (unit-tested). Applied at the top of `signInAction`/`signUpAction`/
+  `resetPasswordAction`.
+- **Admin add-points**: 30 / 60s per admin id (`addPointsAction`).
+
+**Store:** ships an in-memory `MemoryRateLimitStore` (per-process — correct for
+dev/single-instance, resets on cold start). **PROD SWAP (O-6, deploy-gated):**
+implement the `RateLimitStore` interface over **Upstash Redis** (`INCR` +
+`PEXPIRE`, or `@upstash/ratelimit`) or **Vercel KV** and pass it to
+`createRateLimiter(store)` in `rate-limit.ts`. The `UPSTASH_REDIS_REST_URL` /
+`UPSTASH_REDIS_REST_TOKEN` env vars are already validated in `lib/env.ts`. A
+shared store is required for multi-instance enforcement on Vercel's serverless
+fan-out.
 
 ### 10.5 Provisioned environments (filled in as phases land)
 

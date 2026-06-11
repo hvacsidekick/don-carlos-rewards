@@ -26,16 +26,25 @@ const clientSchema = z.object({
   NEXT_PUBLIC_MAPS_EMBED: z.string().optional(),
 });
 
-/** Server-only vars — never sent to the client. */
-const serverSchema = z.object({
-  SUPABASE_SERVICE_ROLE_KEY: z
-    .string()
-    .min(1, "SUPABASE_SERVICE_ROLE_KEY is required (server-only)"),
-  // Optional until their phases (rate limiting = Phase 10, Sentry = Phase 12).
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-  SENTRY_DSN: z.string().optional(),
-});
+/**
+ * Server-only var schema. Built lazily INSIDE `getServerEnv` (not at module
+ * top-level) so it is tree-shaken out of the client bundle — otherwise the
+ * field-name strings ride along in shared client chunks (no secret value, but
+ * unnecessary). Phase 10 secret-hygiene tidy.
+ */
+function makeServerSchema() {
+  return z.object({
+    SUPABASE_SERVICE_ROLE_KEY: z
+      .string()
+      .min(1, "SUPABASE_SERVICE_ROLE_KEY is required (server-only)"),
+    // Optional until their phases (rate limiting = Phase 10, Sentry = Phase 12).
+    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+    SENTRY_DSN: z.string().optional(),
+  });
+}
+
+type ServerEnv = z.infer<ReturnType<typeof makeServerSchema>>;
 
 function formatErrors(error: z.ZodError): string {
   return error.issues.map((i) => `  • ${i.path.join(".")}: ${i.message}`).join("\n");
@@ -66,15 +75,15 @@ export const clientEnv = parsedClient.data;
  * Server env is validated lazily and ONLY on the server. Accessing it from a
  * client bundle is a programming error and throws.
  */
-let _serverEnv: z.infer<typeof serverSchema> | undefined;
+let _serverEnv: ServerEnv | undefined;
 
-export function getServerEnv(): z.infer<typeof serverSchema> {
+export function getServerEnv(): ServerEnv {
   if (typeof window !== "undefined") {
     throw new Error("getServerEnv() must not be called in client code.");
   }
   if (_serverEnv) return _serverEnv;
 
-  const parsed = serverSchema.safeParse({
+  const parsed = makeServerSchema().safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,

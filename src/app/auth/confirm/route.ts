@@ -1,8 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import type { EmailOtpType } from "@supabase/supabase-js";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/site-url";
+
+/**
+ * Validate the email-OTP `type` rather than blind-casting it (closes Phase 3
+ * audit m-3). Only the email-link OTP types Supabase issues are accepted; any
+ * other value short-circuits to the error page.
+ */
+const emailOtpTypeSchema = z.enum([
+  "signup",
+  "invite",
+  "magiclink",
+  "recovery",
+  "email_change",
+  "email",
+]);
 
 /**
  * Email OTP confirmation (BLUEPRINT.md §7). Handles the `token_hash` email-link
@@ -17,12 +31,15 @@ import { safeNextPath } from "@/lib/site-url";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get("token_hash");
-  const type = searchParams.get("type") as EmailOtpType | null;
+  const typeParsed = emailOtpTypeSchema.safeParse(searchParams.get("type"));
   const next = safeNextPath(searchParams.get("next"));
 
-  if (tokenHash && type) {
+  if (tokenHash && typeParsed.success) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+    const { error } = await supabase.auth.verifyOtp({
+      type: typeParsed.data,
+      token_hash: tokenHash,
+    });
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }

@@ -63,6 +63,9 @@ export const addPointsInputSchema = z
     amountCents: amountCentsSchema.optional(),
     points: pointsSchema.optional(),
     note: noteSchema,
+    // P10-CF-3: optional client-supplied idempotency key (a UUID). One key per
+    // intended add, reused across retries → the server credits exactly once.
+    idempotencyKey: z.string().uuid().optional(),
   })
   .refine(
     (v) => (v.amountCents === undefined) !== (v.points === undefined),

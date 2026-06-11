@@ -1,5 +1,6 @@
 // GENERATED FILE — do not edit by hand.
-// Source: `npx supabase gen types typescript` (Phase 2) against project
+// Source: `npx supabase gen types typescript` (Phase 2; regenerated Phase 10
+// after the add_points_idempotent migration) against project
 // `don-carlos-rewards` (ref uxgcyvexeehvhtuhmztc). Regenerate after any schema
 // migration. See README §"Regenerating database types".
 
@@ -202,6 +203,7 @@ export type Database = {
           amount_cents: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
           notes: string | null
           points_balance_after: number
           points_delta: number
@@ -213,6 +215,7 @@ export type Database = {
           amount_cents?: number | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           notes?: string | null
           points_balance_after: number
           points_delta: number
@@ -224,6 +227,7 @@ export type Database = {
           amount_cents?: number | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           notes?: string | null
           points_balance_after?: number
           points_delta?: number
@@ -264,6 +268,34 @@ export type Database = {
           amount_cents: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
+          notes: string | null
+          points_balance_after: number
+          points_delta: number
+          staff_id: string | null
+          transaction_type: Database["public"]["Enums"]["tx_type"]
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      add_points_idempotent: {
+        Args: {
+          amount_cents?: number
+          idem_key?: string
+          note?: string
+          pts: number
+          target: string
+        }
+        Returns: {
+          amount_cents: number | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
           notes: string | null
           points_balance_after: number
           points_delta: number
@@ -284,6 +316,7 @@ export type Database = {
           amount_cents: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
           notes: string | null
           points_balance_after: number
           points_delta: number
@@ -329,6 +362,7 @@ export type Database = {
           amount_cents: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
           notes: string | null
           points_balance_after: number
           points_delta: number
@@ -349,6 +383,7 @@ export type Database = {
           amount_cents: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
           notes: string | null
           points_balance_after: number
           points_delta: number

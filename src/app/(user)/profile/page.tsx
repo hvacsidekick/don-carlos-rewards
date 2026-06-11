@@ -6,6 +6,7 @@ import { ProfileForm } from "@/components/auth/ProfileForm";
 import { QrTokenCard } from "@/components/auth/QrTokenCard";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { DeleteAccountButton } from "@/components/auth/DeleteAccountButton";
+import { ExportDataButton } from "@/components/auth/ExportDataButton";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -51,6 +52,12 @@ export default async function ProfilePage() {
           Account
         </h2>
         <SignOutButton />
+        <div className="mt-2 border-t border-separator pt-4">
+          <p className="mb-3 text-footnote text-fg-secondary">
+            Download a copy of your profile and points history.
+          </p>
+          <ExportDataButton />
+        </div>
         <div className="mt-2 border-t border-separator pt-4">
           <p className="mb-3 text-footnote text-fg-secondary">
             Deleting your account permanently removes your data.

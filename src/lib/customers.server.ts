@@ -2,6 +2,8 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-guard";
+import { decodeCursor } from "@/lib/cursor";
+import { ilikeContainsValue } from "@/lib/postgrest-escape";
 import {
   CUSTOMERS_PAGE_SIZE,
   type CustomerListItem,
@@ -28,57 +30,12 @@ import {
  * after the profile page is fetched (N+0 round-trips, page-bounded).
  */
 
-type CursorKey = { c: string; i: string };
-
+/** Encode a customer-list cursor (the list's sort key is `(created_at, id)`). */
 function encodeCursor(row: { createdAt: string; id: string }): string {
-  const payload: CursorKey = { c: row.createdAt, i: row.id };
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-}
-
-function decodeCursor(raw: string): CursorKey | null {
-  try {
-    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as CursorKey).c === "string" &&
-      typeof (parsed as CursorKey).i === "string"
-    ) {
-      return { c: (parsed as CursorKey).c, i: (parsed as CursorKey).i };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Build the value side of an `ilike.<value>` operand for a PostgREST `.or()`
- * filter string, for a contains-match on a user-supplied term.
- *
- * Two distinct escaping layers are at play and were previously conflated:
- *
- *  1. LIKE pattern: a literal `%`, `_` or `\` in the term must be backslash-escaped
- *     so it matches literally instead of acting as a wildcard. We add `%…%` around
- *     the escaped term for the contains-match.
- *
- *  2. PostgREST `.or()` tokenizer: the reserved chars `,`, `(`, `)` (and `.`)
- *     delimit the filter list/operator syntax. Backslash-escaping them (the old
- *     approach) does NOT work — PostgREST treats the backslash as a literal char,
- *     so a search for `a,b` broke the filter or matched the wrong rows. The correct
- *     fix is to WRAP the whole value in double quotes; PostgREST then takes the
- *     quoted span verbatim. Inside the quotes a literal `"` or `\` must itself be
- *     backslash-escaped for the tokenizer.
- *
- * Order matters: LIKE-escape first (operates on the raw term), then wrap+quote.
- */
-function ilikeContainsValue(term: string): string {
-  // 1) LIKE-escape: backslash before \, %, _ so they match literally.
-  const likeEscaped = term.replace(/[\\%_]/g, "\\$&");
-  const pattern = `%${likeEscaped}%`;
-  // 2) PostgREST quote-escape: \ and " inside the double-quoted value.
-  const quoteEscaped = pattern.replace(/[\\"]/g, "\\$&");
-  return `"${quoteEscaped}"`;
+  return Buffer.from(
+    JSON.stringify({ c: row.createdAt, i: row.id }),
+    "utf8",
+  ).toString("base64url");
 }
 
 /**

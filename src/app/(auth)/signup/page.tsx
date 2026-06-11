@@ -30,7 +30,7 @@ export default async function SignupPage({
         </>
       }
     >
-      <SignupForm />
+      <SignupForm next={next} />
     </AuthShell>
   );
 }
