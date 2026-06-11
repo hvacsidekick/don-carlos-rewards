@@ -249,20 +249,23 @@ export function RewardsCard({
           threshold={config.redeem_threshold}
           onRedeemed={applyBalance}
           trigger={
-            <Button
-              type="button"
-              size="lg"
-              disabled={!progress.eligible}
-              className={cn(
-                "w-full",
-                // Eligible: subtle dc-yellow glow pulse (suppressed under reduced
-                // motion by the global CSS rule in globals.css).
-                progress.eligible && "animate-glow-pulse",
-              )}
-            >
-              <Gift className="size-5" aria-hidden="true" />
-              Redeem {rewardValue} Off
-            </Button>
+            // D4-2 fix: the eligible glow is now a blurred dc-yellow SIBLING whose
+            // OPACITY pulses (GPU-composited, DESIGN_SYSTEM §7.4) — no box-shadow
+            // animation. The glow sits behind the button (-z-10) and is purely
+            // decorative (aria-hidden). Reduced motion freezes the opacity via the
+            // global CSS safeguard, leaving a constant soft glow.
+            <div className="relative">
+              {progress.eligible ? (
+                <span
+                  aria-hidden="true"
+                  className="animate-glow-pulse pointer-events-none absolute -inset-1 -z-10 rounded-[calc(var(--radius)+4px)] bg-dc-yellow/60 blur-md"
+                />
+              ) : null}
+              <Button type="button" size="lg" disabled={!progress.eligible} className="w-full">
+                <Gift className="size-5" aria-hidden="true" />
+                Redeem {rewardValue} Off
+              </Button>
+            </div>
           }
         />
       </div>

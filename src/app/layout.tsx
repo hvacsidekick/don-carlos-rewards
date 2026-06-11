@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { BottomTabBar } from "@/components/nav/BottomTabBar";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import { Toaster } from "@/components/ui/sonner";
 import { getServerAuth } from "@/lib/auth/get-server-auth";
 
@@ -13,10 +15,27 @@ export const metadata: Metadata = {
   },
   description: "Earn points and unlock rewards at Don Carlos Taco Shop, Arvada CO.",
   applicationName: "Don Carlos Rewards",
+  // PWA manifest (src/app/manifest.ts → /manifest.webmanifest). Explicit link so
+  // the <link rel="manifest"> is emitted even on routes that override metadata.
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
+    // iOS standalone install: capable + status-bar style + home-screen title.
+    // "default" status bar keeps a legible (non-overlapping) bar; the app already
+    // honors safe-area insets (viewportFit:"cover" + min-h-screen-safe).
     capable: true,
     statusBarStyle: "default",
     title: "Don Carlos",
+    // iOS ignores the manifest icons — it uses apple-touch-icon. 180×180, opaque.
+    startupImage: undefined,
+  },
+  icons: {
+    // Standard favicon stays the app/icon.svg (auto-detected). Add the PNG app
+    // icon + the iOS apple-touch-icon (opaque, 180×180).
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
   },
   formatDetection: { telephone: false },
 };
@@ -50,8 +69,11 @@ export default async function RootLayout({
               the vertically-centered auth screens. */}
           <div className="pb-20">{children}</div>
           <BottomTabBar />
+          <InstallPrompt />
           <Toaster />
         </AuthProvider>
+        {/* Registers /sw.js in production only (guarded, no inline script → CSP-safe). */}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

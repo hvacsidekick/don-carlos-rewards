@@ -215,7 +215,13 @@
 - Deviation: account-deletion live e2e + signup/recovery e2e remain deploy-gated on the real service-role key + SMTP (pre-existing, documented). Leaked-password protection (criterion 8) is a Supabase dashboard toggle → Phase 12.
 
 ## Phase 11 — PWA + Performance + Accessibility Polish
-- Status: not-started
+- Status: **✅ Verified** (2026-06-11 — Auditor Grade A−, 0 blocking; Orchestrator verified + accepted 2 minor findings as documented; device-gated items deferred to Phase 12 smoke test.)
+- Branch: master (critical-path phase built in main tree per recipe)
+- Builder notes: PWA manifest (standalone, maskable icons), hand-written SW (network-only navs, CSP-safe), iOS metas, InstallPrompt (A2HS capture), offline shell, D4-2 glow-pulse fix (opacity-only), CSP sweep documented clean. Gates: tsc 0, tests 34/34, lint clean, build success. Honest about device-gated items (Lighthouse, install, screen reader).
+- Auditor defects (sev): **Grade A− — APPROVED** (0 blocking, 0 major, 2 minor, 1 NIT). Findings: m-1 (image cache count-based, recommend size cap monitoring), m-2 (localStorage fallback), n-1 (Lighthouse device pass expected). Trust boundary HELD (SW never caches HTML/auth). D4-2 closed. Gates green.
+- Fixer changes: None required (0 blocking, minors accepted as-is).
+- Verifier confirmation (date, what was run): **✅ Verified 2026-06-11.** Re-ran all gates independently: `tsc` 0, `npm test` 34/34, `lint` clean, `build` success (27 pages, `/manifest.webmanifest` + `/offline` emitted). Source inspection confirmed: manifest installability-correct, SW network-only navs + CSP-safe, iOS metas present, D4-2 fix verified (opacity-only glow-pulse in built CSS), InstallPrompt a11y-built, offline page correct. Auditor's 2 minor findings **accepted as documented** (production monitoring items, not launch blockers). Device-gated items (Lighthouse, install, offline, VoiceOver) deferred to Phase 12 production smoke test. **Phase 12 (Production Deployment + Launch Audit) unblocked.**
+- Deviations from plan: None. Placeholder PWA icon art (O-2) documented. SW production-only (correct). No jest-axe component test (harness node-only by design, pure manifest test added instead). Device-gated verification deferred to Phase 12 per plan.
 
 ## Phase 12 — Production Deployment + Launch Audit
-- Status: not-started
+- Status: in-progress (2026-06-11 — Orchestrator deploying)
