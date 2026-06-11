@@ -224,4 +224,15 @@
 - Deviations from plan: None. Placeholder PWA icon art (O-2) documented. SW production-only (correct). No jest-axe component test (harness node-only by design, pure manifest test added instead). Device-gated verification deferred to Phase 12 per plan.
 
 ## Phase 12 — Production Deployment + Launch Audit
-- Status: in-progress (2026-06-11 — Orchestrator deploying)
+- Status: **⚠️ BLOCKED** (2026-06-11 — awaiting manual dashboard access)
+- **Blocker:** Cannot authenticate to Supabase/Vercel dashboards via browser
+- **Progress:** Code pushed to GitHub ✅, Vercel project created ✅, env vars partially configured ✅
+- **Deployments attempted:** 2 (all failed with build error)
+- **Required:** User must authenticate to dashboards to:
+  1. Retrieve real Supabase service role key
+  2. Update Vercel environment variable
+  3. Configure production CORS
+  4. Investigate Vercel build failure
+- **Details:** See `PHASE_12_BLOCKER_REPORT.md`
+- **Repository:** https://github.com/hvacsidekick/don-carlos-rewards (pushed, commit `225310d`)
+- **Vercel project:** `sidekick-s-projects/don-carlos-rewards` (created, build failing)
