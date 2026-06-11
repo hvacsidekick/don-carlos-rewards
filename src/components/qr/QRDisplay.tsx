@@ -28,6 +28,10 @@ export function QRDisplay({
   size?: number;
   className?: string;
 }) {
+  // Enforce the DESIGN_SYSTEM §5.5 ≥200px minimum so a future caller can't
+  // silently ship an unscannable QR by passing a small `size` (N-1).
+  const renderSize = Math.max(size, 200);
+
   const { viewBox, path } = React.useMemo(() => {
     const svg = buildQrSvg(qrPayloadForToken(token));
     return { viewBox: `0 0 ${svg.size} ${svg.size}`, path: svg.path };
@@ -43,13 +47,13 @@ export function QRDisplay({
     >
       <svg
         viewBox={viewBox}
-        width={size}
-        height={size}
+        width={renderSize}
+        height={renderSize}
         shapeRendering="crispEdges"
         role="img"
         aria-label="Your rewards QR code. Show this to staff at checkout."
         className="h-auto w-full"
-        style={{ maxWidth: size }}
+        style={{ maxWidth: renderSize }}
       >
         {/* White quiet-zone background fills the full viewBox (incl. padding). */}
         <rect width="100%" height="100%" fill="#ffffff" />

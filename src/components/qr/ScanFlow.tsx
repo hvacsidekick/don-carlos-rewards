@@ -67,6 +67,12 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
   // duplicate confirm for the same person (idempotency / double-scan guard).
   const lastAddRef = React.useRef<{ id: string; at: number } | null>(null);
 
+  // Token of the customer currently in the confirm sheet (set on a successful
+  // resolve). Copied into `recentlyScannedRef` on a successful add so the same
+  // physical QR isn't auto-re-resolved the instant the scanner re-arms (M-1).
+  const currentTokenRef = React.useRef<string | null>(null);
+  const recentlyScannedRef = React.useRef<{ token: string; at: number } | null>(null);
+
   const reArmScanner = React.useCallback(() => {
     setResetSignal((n) => n + 1);
   }, []);
@@ -76,6 +82,7 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
     const res = await resolveQrTokenAction(token);
     setResolving(false);
     if (res.ok) {
+      currentTokenRef.current = token;
       setCustomer(res.data);
       setAmount("");
       setAmountError(null);
@@ -87,7 +94,15 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
 
   const handleDetected = React.useCallback(
     (text: string) => {
-      void resolveToken(text.trim());
+      const token = text.trim();
+      // Cooldown: ignore an AUTO re-detection of the QR we just added points to
+      // (the lens is often still on it when the scanner re-arms). A deliberate
+      // re-scan after the window — or any other customer's code — still resolves.
+      const recent = recentlyScannedRef.current;
+      if (recent && recent.token === token && Date.now() - recent.at < DEDUPE_WINDOW_MS) {
+        return;
+      }
+      void resolveToken(token);
     },
     [resolveToken],
   );
@@ -154,6 +169,11 @@ export function ScanFlow({ pointsPerDollar }: { pointsPerDollar: number }) {
 
     if (res.ok) {
       lastAddRef.current = { id: customer.id, at: Date.now() };
+      // Suppress an immediate auto-re-scan of this same QR when the camera
+      // re-arms (M-1) — staff would otherwise see a spurious re-prompt.
+      if (currentTokenRef.current) {
+        recentlyScannedRef.current = { token: currentTokenRef.current, at: Date.now() };
+      }
       haptic.success();
       toast.success(
         `Added ${formatPoints(res.data.pointsAdded)} ${res.data.pointsAdded === 1 ? "point" : "points"} for ${customer.displayName ?? "the customer"}.`,
