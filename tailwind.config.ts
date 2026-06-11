@@ -140,11 +140,14 @@ const config: Config = {
           to: { height: "0" },
         },
         // DESIGN_SYSTEM §5.1 — subtle dc-yellow glow pulse on the eligible CTA.
-        // Animates box-shadow only on an idle element (not during interaction),
-        // so it stays off the input-latency path; honored only when motion is on.
+        // D4-2 fix (Phase 11): animate OPACITY only (GPU-composited, §7.4) on a
+        // blurred glow SIBLING behind the button, instead of animating box-shadow
+        // on the button itself. The glow element carries the static blur; only its
+        // opacity tweens, so nothing on the layout/paint path animates. Suppressed
+        // under reduced motion by the global CSS safeguard in globals.css.
         "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 0 0 rgba(249,199,79,0.0)" },
-          "50%": { boxShadow: "0 0 16px 2px rgba(249,199,79,0.55)" },
+          "0%, 100%": { opacity: "0.35" },
+          "50%": { opacity: "1" },
         },
       },
       animation: {

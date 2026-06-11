@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Maskable source: full-bleed background (the OS mask supplies the shape).
+       Taco mark sits inside the maskable safe zone (centered circle, radius 40
+       percent) so no platform mask clips it. Brand hex per DESIGN_SYSTEM s2:
+       red E63946, yellow F9C74F, green 90BE6D. Placeholder art pending O-2. -->
+  <rect width="512" height="512" fill="#E63946"/>
+  <path d="M152 320a104 104 0 0 1 208 0H152Z" fill="#F9C74F" stroke="#fff" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M152 320h208" stroke="#90BE6D" stroke-width="20" stroke-linecap="round"/>
+</svg>
