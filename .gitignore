@@ -45,3 +45,6 @@ yarn-error.log*
 # local artifacts
 /logs
 .playwright-mcp
+
+# claude code orchestration state (worktrees, session config)
+.claude/

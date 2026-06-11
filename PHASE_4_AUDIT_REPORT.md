@@ -1,131 +1,131 @@
-# Phase 4 — Rewards Card UI — AUDIT REPORT (hostile, independent)
+# Phase 4 — Rewards Card UI — HOSTILE AUDIT REPORT (independent)
 
-**Auditor:** Phase 4 Auditor (independent of Builder)
-**Date:** 2026-06-10
-**Verdict:** **A− · APPROVED** (above the B+ bar). All blocking concerns clear; defects below are deferrable polish except one MAJOR a11y item that should be fixed before Verified-final but does not break functionality or security.
+**Auditor:** Independent Phase-4 Auditor (does not trust the Builder's claims) · **Date:** 2026-06-10
+**Branch:** `phase/4-rewards-card` (baseline `a4e5d2e`) · **DB:** Supabase ref `uxgcyvexeehvhtuhmztc`
+**Method:** independent re-run of all gates · line-by-line code read · **live DB verification via elevated SQL** · **full browser leg** (real session minted, login → dashboard, live realtime earn observed, redeem dialog driven, light+dark screenshots). Dev server stopped after testing.
 
-The build is genuinely high quality: rewards math is correct across the edge cases I probed, the redeem trust boundary is sound (no client-writable points, no client amount, `getUser()` identity, server-derived threshold), realtime is correctly filtered + RLS-gated + cleaned up, and the celebrate-once lifecycle survives the redeem→re-earn / refresh-while-eligible cases. The defects are concentrated in design-spec fidelity nits and one screen-reader spam issue.
-
----
-
-## 1. Build gates (re-run by the Auditor, not trusted from the report)
-
-All three gates pass on a clean `.next`. Notably the Builder's claimed "Windows ENOENT build flakiness" did **not** reproduce — `npm run build` exited 0 cleanly on first run.
-
-| Gate | Command | Result |
-|------|---------|--------|
-| Typecheck | `rm -rf .next && npx tsc --noEmit` | **exit 0** (`TSC_EXIT: 0`) |
-| Lint | `npm run lint` | **exit 0** — `✔ No ESLint warnings or errors` (only the informational Next 16 `next lint` deprecation notice) |
-| Build | `npm run build` | **exit 0** — 16/16 static pages generated; `/dashboard` dynamic (ƒ), First Load JS 256 kB (framer-motion dominated) |
-
-Build route table (verbatim relevant rows):
-```
-├ ƒ /dashboard                           44.7 kB         256 kB
-ƒ Middleware                              104 kB
-BUILD_EXIT: 0
-```
-Pre-existing `@supabase/ssr` Edge `process.version` warning originates in `lib/supabase/middleware.ts` (Phase 3), not Phase 4.
+> Note: a prior audit report existed at this path written against an **earlier** revision of `RewardsCard.tsx`. Its MAJOR finding (count-up `aria-live` spam) has since been **fixed in the current code** (digits now `aria-hidden`; a visually-hidden `role="status" aria-live="polite"` announces only the settled balance — confirmed live). This report supersedes it against the current tree and adds the browser-leg verification.
 
 ---
 
-## 2. Per-acceptance-criterion PASS/FAIL (PLAN.md §Phase 4)
+## VERDICT
 
-| # | Criterion | Verdict | Evidence |
-|---|-----------|---------|----------|
-| 1 | Ring + stamps reflect real `points_balance` and `rewards_config` threshold | **PASS** | `dashboard/page.tsx` fetches `profiles` + `rewards_config(id=1)`; all geometry via `progressToNextReward(balance,cfg)` in `lib/rewards.ts`. DB config confirmed: threshold=100, stamps=10, value=$10. No magic numbers. |
-| 2 | CTA disabled below threshold; enabled at/above; redeem decrements + logs via Phase-2 fn | **PASS** | `RewardsCard.tsx:244` `disabled={!progress.eligible}`; `RedeemDialog` confirm `disabled={pending \|\| !eligible}`. `redeemPointsAction` → `rpc("redeem_points",{pts})`; RPC verified `proretset=false` returns single `transactions` row; `data.points_balance_after`/`data.id` valid. |
-| 3 | Reaching threshold plays celebration exactly once | **PASS** | `celebratedRef` (RewardsCard.tsx:97-143). Fires only on upward crossing `next>=th && prev<th && !celebratedRef`; seeded `true` when mounting eligible (no replay on refresh); re-armed only when balance drops `< threshold`. Traced redeem→re-earn and refresh-while-eligible: correct. Reduced-motion → toast instead of confetti. |
-| 4 | Points added server-side update card live within ~1s | **PASS (wiring) / UNVERIFIED (timing)** | `profiles` confirmed in `supabase_realtime` publication (live DB query). Subscription filter `id=eq.<uid>`, cleaned up via `removeChannel` on unmount. RLS `profiles_select_own` (`auth.uid()=id`) gates delivery — verified via `pg_policy`. End-to-end ~1s timing needs a live browser session (Phase 5 / Verifier) — same honest caveat the Builder flagged; not blocking. |
-| 5 | ~60fps; reduced-motion disables non-essential motion | **PASS (by construction)** | Only transform/opacity/`strokeDashoffset` animated; confetti capped 28; `useReducedMotion()` in every animated component + global CSS `@media (prefers-reduced-motion)` zeroing animations. Glow-pulse (box-shadow) is the one exception — see N-1. Device 60fps profile is Phase 11. |
-| 6 | Dark mode correct; keyboard + SR accessible (ring aria progress, redeem labeled) | **PARTIAL PASS** | Tokens only, no hardcoded #fff/#000 — dark mode follows token blocks. Ring `role="progressbar"`+aria-valuenow/min/max. Redeem labeled; Radix dialog gives focus-trap/Esc/restore. **But** balance `aria-live="polite"` spams SR frame-by-frame during count-up — **M-1**. |
-| 7 | Pixel-quality matches DESIGN_SYSTEM RewardsCard spec | **PARTIAL PASS** | Matches anatomy (260px ring, stroke 8, rounded caps, 12-o'clock clockwise, 5×2 grid, title2/700/tabular-nums balance, status line, CTA). Deviations: stamp 36px not 40px (justified), grid gap 8px not the spec'd 12px (N-2), TacoGlyph is a crude placeholder, Mascot is an emoji placeholder (O-2). |
+| | |
+|---|---|
+| **Letter grade** | **A−** |
+| **Pass?** | **PASS** — clears the B+ bar; **0 critical / 0 blocking** |
+| **Defect counts** | CRITICAL 0 · MAJOR 0 · MINOR 5 · nit 4 |
+| **Browser realtime — did the card update live?** | **YES, verified.** A server-side balance change pushed to the open, logged-in card and re-rendered ring + stamps + CTA in < 1s with no reload. |
 
 ---
 
-## 3. Severity-tagged defect list
+## GATES (re-run by the Auditor, not trusted from the report)
 
-### MAJOR (fix before final Verified; non-blocking for functionality/security)
+| Gate | Result |
+|---|---|
+| `npm run typecheck` (tsc --noEmit) | **exit 0**, clean, no `any` |
+| `npm run lint` (next lint) | **exit 0** — "No ESLint warnings or errors" (Next-16 deprecation notice is informational) |
+| `npm run build` | **exit 0** — clean (after `rm -rf .next`, `NEXT_TELEMETRY_DISABLED=1`); 16/16 routes; `/dashboard` 44.7 kB / 256 kB First Load, dynamic `ƒ`. **No** ENOENT in the production build this run. |
 
-**M-1 — Balance count-up spams screen readers frame-by-frame**
-`src/components/rewards/RewardsCard.tsx:210` — `<p ... aria-live="polite">{formatPoints(displayBalance)}</p>`. `displayBalance` comes from `useCountUp`, which calls `setDisplay` on every `requestAnimationFrame` (~30 updates over 500ms). With `aria-live="polite"` on that node, every intermediate integer ("12", "27", "41"…) is queued for announcement, producing a burst of number-spam on each balance change — exactly the failure the design gate warns about. *Why it matters:* §9 a11y is acceptance, not polish; this actively degrades the SR experience on the signature screen. *Proof:* trace `useCountUp` (lines 40-76) — `setDisplay(Math.round(...))` inside the RAF `tick`, bound to a node with a live region. *Fix direction:* announce only the settled value — drive `aria-live` off `balance` (the target), not `displayBalance`; e.g. render the animated digits with `aria-hidden` and add a visually-hidden `aria-live="polite"` node containing the final `formatPoints(balance)` updated once per change. Under reduced-motion this is moot (count-up is instant) but the live region still fires once, which is correct.
-
-### MINOR (deferrable)
-
-**m-2 — `isInsufficientBalance` over-broad string match**
-`src/actions/rewards.ts:32-41` — matches any error message containing `"balance"`. A generic DB/serialization error whose text happens to include "balance" would be misreported to the user as "You don't have enough points." Low real-world likelihood (the RPC's only `balance`-bearing error is the intended `insufficient balance`), and the user impact is a slightly-wrong-but-still-safe message, so MINOR. *Fix:* match on the specific RPC signal (`message.includes("insufficient balance")`) or, better, the SQLSTATE/`code` from the PostgREST error rather than substring-matching free text.
-
-**m-3 — Stamp grid gap is 8px, spec says 12px**
-`src/components/rewards/StampGrid.tsx:57` (`gap: 8`) and `RewardsCardSkeleton.tsx:20` (`gap-2`). DESIGN_SYSTEM §5.2 specifies a 12px gap. Combined with the 36px (not 40px) stamps (§5.1), the grid is denser than spec. Defensible to fit inside the 260px ring, but it's an undocumented deviation from the two numbers the spec pins. *Fix:* either bump to 12px or log the deviation in PHASE_LOG with the ring-fit rationale (the Builder only logged the stamp-size change, not the gap).
-
-**m-4 — Dashboard `transactions` peek relies on implicit RLS, no explicit `user_id` filter**
-`src/app/(user)/dashboard/page.tsx:46-50` selects last-3 transactions ordered by `created_at` with no `.eq("user_id", user.id)`. RLS (`tx_select_own_or_admin`) correctly scopes this to the user, so it is *secure*. But for an **admin** viewing their own dashboard, RLS lets them read *all* users' transactions, so the "recent activity" peek could surface other customers' rows. *Why it matters:* an admin's personal dashboard would show a global feed, which is wrong UX (and a mild privacy smell in a screenshot). *Fix:* add `.eq("user_id", user.id)` for defense-in-depth + correctness regardless of caller role.
-
-### NIT (cosmetic / future-proofing)
-
-**N-1 — Glow-pulse animates `box-shadow` (violates §7.4 "animate only transform/opacity")**
-`tailwind.config.ts:145-148` — the eligible-CTA `glow-pulse` keyframe animates `box-shadow`, which §7.4 explicitly says to avoid (not GPU-composited). It's an idle, infinite animation on a single small element (not on the input-latency path) and is correctly killed under reduced-motion by the global CSS rule, so impact is negligible — but it is a literal violation of the stated motion rule. *Fix (optional):* render the glow as an absolutely-positioned sibling and animate its `opacity`/`transform` instead.
-
-**N-2 — TacoGlyph + Mascot are placeholders**
-`TacoGlyph.tsx` is a crude two-path SVG; `Mascot.tsx` renders an emoji. Both are explicitly placeholder-pending O-2 (brand assets) and the public APIs are stable/swappable, so this is acceptable for Phase 4 — flagged only so the Verifier doesn't mistake the rough glyph for "pixel-quality."
-
-**N-3 — `RewardPulse` runs an infinite `scale` animation wrapping the live count-up text**
-`RewardsCard.tsx:275-292` — the eligible ring pulse (scale 1→1.06→1) wraps the ring only (not the balance number), animates transform (GPU), reduced-motion safe. No defect; noting it's correctly scoped so it doesn't reflow the tabular-nums balance.
+The Windows `.next` ENOENT race did **not** hit the production build, but it **did** repeatedly disrupt **dev** mode during interactive testing (see Environment note). Not app code.
 
 ---
 
-## 4. Design-gate verdict — DESIGN_SYSTEM §14 ten-point rubric
+## VERIFIED GOOD (independently re-proven)
 
-| # | Rubric point | Verdict | Note |
-|---|--------------|---------|------|
-| 1 | Hierarchy (one focal point) | **PASS** | Ring+balance is the clear hero; single h1 (dashboard greeting), card h2, activity h2. |
-| 2 | Alignment (4px grid) | **PASS** | Consistent `gap-8`/`mt-6`/`p-6`; gap-8 stamp deviation is the only off-grid-vs-spec item (m-3 is wrong-value, still on grid). |
-| 3 | Type discipline (ramp, ≤3 sizes) | **PASS** | title2 balance, headline title, body/footnote support — uses the ramp. |
-| 4 | Color restraint (90/10) | **PASS** | Neutral surfaces; red rationed to ring/stamps/CTA; yellow to glow/confetti. |
-| 5 | Motion (springy, 60fps, RM-safe) | **PASS** | Springs from `lib/motion.ts`; RM honored everywhere; one box-shadow nit (N-1). |
-| 6 | States (loading/empty/error/success) | **PASS** | Route `loading.tsx` + `RewardsCardSkeleton` match footprint; zero-points mascot state; redeem inline error `role="alert"`; success toast/celebration. No dead ends. |
-| 7 | Both modes | **PASS** | Token-only; verified mode-aware tokens incl. `--dc-red-text`/`--error-text` brightening in dark block. |
-| 8 | Accessibility (§9) | **PARTIAL** | Strong semantics, but **M-1** (count-up live-region spam) keeps this from a clean pass. |
-| 9 | Touch (≥44pt) | **PASS** | `Button size="lg"` = `min-h-12` (48px); default `min-h-11` (44px). |
-| 10 | Delight (earn/unlock satisfying) | **PASS (by construction)** | Stamp spring + confetti + haptic + ring flourish; rough placeholder glyph/mascot is the only thing between this and genuine wow (O-2). |
+### Functionality & security
+1. **Math is fully `rewards_config`-driven** (`src/lib/rewards.ts`). Live config: `redeem_threshold=100, stamps_per_card=10, redeem_value_cents=1000`. Live card at balance 70 rendered "70 of 100", "7 of 10 stamps", "30 points to your $10.00 reward" (`perStamp=10`, `filled=floor(70/10)=7`). No hard-coded 100/10. Edge cases traced: 0→empty; 99→9 stamps/not eligible; 100→full/eligible; 200→clamped full (never wraps / never shows >`stamps`). ✅
+2. **Redeem decrements + writes a `redeem` ledger row — proven live.** Real `redeem_points(100)` RPC (impersonating the user) returned a `redeem` row (`points_delta=-100, points_balance_after=10`); profile **110→10**, `total_redemptions` **1→2**, persisted. ✅
+3. **Insufficient-balance rejection — proven live.** `redeem_points(100)` at balance 10 raised `P0001 insufficient balance`; mapped to friendly copy by `isInsufficientBalance`. ✅
+4. **`redeemPointsAction` takes NO client amount.** Reads `redeem_threshold` server-side, Zod-validates (`redeemThresholdSchema`), passes as `pts`. Identity via `getUser()` (revalidates JWT). RLS-bound server client — never service-role. ✅
+5. **Points NOT client-writable — guard trigger proven live.** A client-context UPDATE of `points_balance=99999, is_admin=true` was **silently reverted** (stayed 10 / false). `guard_profile_update` honors writes only when `app.points_ctx='on'`, set exclusively inside SECURITY DEFINER fns. ✅
+6. **`redeem_points` RPC body verified** (live `pg_get_functiondef`): SECURITY DEFINER, `auth.uid()` identity, `where points_balance >= pts`, atomic decrement + `+1 total_redemptions` + `redeem` row, typed errors. ✅
+7. **Realtime publication present** (live): `public.profiles` ∈ `supabase_realtime`. Migration `20260610020000_enable_realtime_profiles.sql` is idempotent + correct. ✅
+8. **No subscription leak / no resubscribe churn.** Effect returns `removeChannel`; channel name `profile:${id}` is stable; `applyBalance` deps `[config, reduce, rewardValue]` are stable post-mount, so the effect does not re-fire → **refutes the duplicate-channel risk.** Console during live update was clean (no channel errors). ✅
+9. **Celebrate-once survives every path.** `celebratedRef` fires only on true upward crossing, seeded `true` when mounting already-eligible (no replay on refresh/remount), re-armed only below threshold. Redeem's double-signal (dialog `onRedeemed` + realtime echo) de-duped by the `next===prev` early-return. ✅
+10. **Count-up SR-safe (prior MAJOR now fixed).** `RewardsCard.tsx:216-221`: animating digits `aria-hidden`; settled balance announced once via `sr-only role="status" aria-live="polite"`. Live snapshot confirmed the separate `status` node ("70 points"). ✅
+11. **Error paths degrade gracefully.** Missing config → `FALLBACK_CONFIG` + friendly action error; RPC failure → mapped copy, dialog stays open, no balance change; realtime payload guarded by `typeof points_balance === "number"`. No unhandled rejections in console. ✅
 
-**Design gate: 9/10 clean, 1 partial (a11y, driven solely by M-1).**
-
----
-
-## 5. Security & correctness deep-dive (the hostile probes)
-
-- **Rewards math (`lib/rewards.ts`) — probed by hand, all consistent:**
-  - balance 0 → within 0, filled 0, percent 0, toNext 100, eligible false. ✓
-  - threshold−1 (99) → within 99, filled `floor(99/100*10)=9`, percent 99, toNext 1, eligible false. ✓ (9 stamps, not yet eligible — correct.)
-  - exactly threshold (100) → eligible branch: within 100, filled 10, percent 100, toNext 0. ✓ (clamped display, doesn't wrap — documented deviation, sensible.)
-  - multiple (200) → eligible true, full card. ✓ (never shows "0 of 10" for a redeemable user.)
-  - non-divisible threshold/stamps (e.g. th=100/stamps=3): filled `min(3, floor(within/100*3))`, ring percent independent of stamps — `filled` and `percent` derive from the same `within`, stay consistent; `filled` clamped to `stamps`. ✓
-  - th=7, balance 5 → within 5, filled `floor(5/7*10? )` — with stamps=10, `floor(5/7*10)=7`; percent ~71.4; toNext 2. Internally consistent. ✓
-  - negative/absurd config: not defended in `lib/rewards.ts` itself (e.g. threshold=0 → `% 0` = NaN), but the **action** guards via `redeemThresholdSchema` (positive int ≤ 1e6) and the page supplies `FALLBACK_CONFIG`, and the DB has CHECK constraints. The display function trusts config; acceptable since config is admin-only + schema-bounded. No card-lies-about-balance path found.
-- **Redeem trust boundary (`actions/rewards.ts`):** takes **no client amount**; redeems exactly the server-read `redeem_threshold`. Identity via `getUser()` (revalidates JWT), not `getSession()`. RLS-bound server client, not service-role. Insufficient-balance handled (string + null-row). Zod validates the config value before the RPC — defense-in-depth, not pure theatre (it guards against a corrupted config reaching the RPC). No way to redeem a non-threshold quantity or redeem for another user. **Sound.**
-- **Optimistic redeem vs realtime echo — no double-apply:** after redeem, `onRedeemed(newBalance)`→`applyBalance(10)` sets `prevBalanceRef=10`; the subsequent realtime UPDATE echo `applyBalance(10)` hits `next===prev` → early return (RewardsCard.tsx:110). No fight, no double stamp/celebration. ✓
-- **Realtime leak:** `removeChannel(channel)` in effect cleanup; effect deps `[supabase, id, applyBalance]` with a stable memoized client. ✓
-- **Celebration-once across cycles:** cannot make it fire twice (guarded by `celebratedRef`, re-armed only below threshold) nor miss a legitimate upward crossing. Refresh-while-eligible seeds `true` → no replay. ✓
-- **Secret hygiene:** rewards components/action import only `lib/supabase/server` (RLS client) + `lib/supabase/client` (anon browser). No `service.ts` / `SUPABASE_SERVICE_ROLE_KEY` in the Phase-4 client chain. Build succeeded; `/dashboard` bundle is framer-motion-dominated, no server-only import leak. ✓
-- **Realtime migration:** idempotent (`if not exists` guard around `alter publication … add table`). Live DB query confirms `public.profiles` IS in `supabase_realtime`. Migration recorded remotely (apply-time timestamp drift noted by Builder; harmless). ✓
-- **DB-verified:** `redeem_points` returns single composite (`proretset=false`) → action's object access is correct; `profiles` SELECT policy `auth.uid()=id` correctly scopes realtime delivery.
+### Apple design (verified against live light + dark screenshots)
+12. **Ring:** 8px stroke, rounded caps, 12-o'clock clockwise (`-rotate-90` + dashoffset), track `--separator`, progress `rgb(var(--dc-red))`, 600ms easeInOut, snaps under reduced-motion. ✅
+13. **Stamp grid:** 5×2 for 10, filled = solid dc-red taco + yellow rim, empty = outline `--text-tertiary`; only newly-filled stamp springs. ✅ (size/gap deviations below)
+14. **Card:** `rounded-3xl`, `shadow-card-hero`(+dark), `bg-surface-tertiary`; hero balance `text-title2 font-bold tabular-nums`. ✅
+15. **Dark mode CORRECT** (live, emulated `prefers-color-scheme: dark`): `--background:0 0 0`, `--foreground:255 255 255`, card `rgb(44,44,46)`; brand red/yellow constant. ✅
+16. **A11y:** ring `role="progressbar"` + valuenow/min/max + descriptive label (live: "Reward progress: 70 of 100 points"); stamp grid `role="img"` "7 of 10 stamps earned"; redeem labeled; Radix dialog focus-trap (live: focus landed on Cancel) + Esc + restore; 44pt targets (`min-h-11`/`min-h-12`, dialog close `size-11`); focus-visible rings. ✅
+17. **Reduced-motion:** `useReducedMotion()` in every animated component + global `@media (prefers-reduced-motion: reduce)` zeroing animations (incl. `glow-pulse`); Celebration → nothing + toast. ✅ (by construction; not driven live)
 
 ---
 
-## 6. Letter grade & verdict
+## DEFECTS
 
-**Grade: A−**
-**Verdict: APPROVED** (clears the B+ minimum comfortably).
+### MINOR
 
-Rationale: every functional/security acceptance criterion passes with verified evidence; the math is correct on every edge case probed; the trust boundary is genuinely sound; realtime is correctly wired, filtered, RLS-gated, and leak-free. It falls short of a straight A only on (a) the count-up screen-reader spam (M-1) and (b) a cluster of spec-fidelity deviations (gap/stamp size, placeholder assets) and the admin-feed correctness nit (m-4). None are blocking for functionality or security; M-1 should be fixed before the phase is stamped Verified because §9 a11y is acceptance-level.
+**M-1 — Recent-activity query not scoped to the user (admin sees a global feed)**
+`src/app/(user)/dashboard/page.tsx:46-50` selects last-3 `transactions` ordered by `created_at` with **no `.eq("user_id", user.id)`**. RLS (`tx_select_own_or_admin`) keeps this secure for normal users, but an **admin** viewing their own dashboard would see *everyone's* transactions in the "recent activity" peek — wrong UX + a privacy smell.
+*Fix:* add `.eq("user_id", user.id)` — correctness/defense-in-depth regardless of caller role.
 
-**Blocking issues:** none.
-**Should-fix-before-Verified-final:** M-1 (a11y).
+**M-2 — Stamp grid gap is 8px, spec requires 12px**
+`StampGrid.tsx:57` (`gap: 8`) and `RewardsCardSkeleton.tsx:20` (`gap-2`). DESIGN_SYSTEM §5.1 line 176 / TASK §4.2 specify **12px**. Builder logged the stamp-size deviation but **not** this gap deviation. Cosmetic (stamps aren't tap targets).
+*Fix:* set 12px (verify the 5×2 grid still fits the 260px ring; adjust stamp size per M-3 if tight) or log the deviation.
+
+**M-3 — Stamp size 36px, spec says 40×40**
+`StampGrid.tsx:36` default `stampSize=36`. DESIGN_SYSTEM §5.1/TASK §4.2 specify 40×40. Builder disclosed this (fit inside ring). Acceptable but off-spec.
+*Fix:* bump ring inner room to 40px, or have the Orchestrator bless the deviation.
+
+**M-4 — Page-level "to next reward" header does not update live**
+`dashboard/page.tsx:74-86` renders `progress.toNext` **server-side**, outside the `RewardsCard` island. In the live earn test the card went eligible but this header above it stayed stale until reload. The card itself is correct; this is a redundant secondary status line that lags realtime.
+*Fix:* drop the redundant page-level line (the card already shows status) or make it client-fed.
+
+**M-5 — Dead `/transactions` link ("See all")**
+`RecentActivity.tsx:54` links to `/transactions`, which doesn't exist (Phase 6) → live 404 (confirmed in console).
+*Fix:* until Phase 6, point at `/dashboard` or drop the link (keep the heading). One line.
+
+### nit
+
+- **N-1** `isInsufficientBalance()` matches the bare substring `"balance"` (`actions/rewards.ts:39`). The RPC only emits the intended message today, but this would mis-map any future "balance"-containing error to "not enough points." Tighten to `insufficient balance` / errcode `P0001`.
+- **N-2** `glow-pulse` keyframe animates `box-shadow` (`tailwind.config.ts:145-148`), which §7.4 says to avoid (not GPU-composited). Idle/infinite on one small element, killed under reduced-motion — negligible impact but a literal rule violation. Optionally render the glow as an opacity-animated sibling.
+- **N-3** `RewardsCard` prop `total_redemptions` is in the prop type but never read (`RewardsCard.tsx:82`). Dead prop (matches TASK §4.4 signature; likely intentional placeholder). `RedeemResult.transactionId` is likewise returned but unused.
+- **N-4** `formatTime()` shows time-of-day only — a multi-day activity list could show three ambiguous "4:00 PM" rows. Fine for a 3-item peek; revisit Phase 6. Also `relreplident='d'` on `profiles` is fine for current PK-filtered `postgres_changes` (live update worked); set `REPLICA IDENTITY FULL` only if a future phase filters realtime on a non-PK column or needs `payload.old`.
+
+### Informational (pre-existing, NOT Phase-4 regressions)
+- Security advisors flag `redeem_points` + other SECURITY DEFINER fns as authenticated-executable. `redeem_points` self-scopes via `auth.uid()` → by design; admin fns gate internally. No new holes from the realtime migration.
+- Auth "leaked password protection disabled" (project-level) and the `@supabase/ssr` Edge `process.version` build warning (Phase 3) are pre-existing.
 
 ---
 
-## 7. Top-3 priorities for the Fixer
+## BROWSER LEG (the gap the Builder couldn't close — NOW CLOSED)
 
-1. **M-1 — Stop the count-up screen-reader spam.** Move `aria-live="polite"` off the per-frame `displayBalance` node; announce only the settled `balance` via a visually-hidden live region (and `aria-hidden` the animating digits). This is the one a11y-acceptance gap.
-2. **m-4 — Scope the recent-activity query to the user.** Add `.eq("user_id", user.id)` in `dashboard/page.tsx` so an admin's own dashboard doesn't surface a global transaction feed (correctness + privacy-in-screenshot).
-3. **m-2 / m-3 — Tighten + document.** Narrow `isInsufficientBalance` to the specific RPC signal (or use the error `code`), and either restore the 12px stamp gap or log the gap+size ring-fit deviation in PHASE_LOG (only the stamp-size deviation is currently logged).
+**Session minted without SMTP:** set `crypt('Test123!pass', gen_salt('bf'))` on the seeded confirmed user `phase4-test@doncarlos.test` via elevated SQL.
+
+**Blocker found & fixed (test fixture, NOT app code):** first GoTrue login returned `500 Database error querying schema`. Auth logs: `Scan error on column index 3, name "confirmation_token": converting NULL to string is unsupported`. The Builder's seeded `auth.users` row left GoTrue's token columns **NULL**; the Go driver can't scan NULL into non-nullable strings. **This is precisely why the Builder couldn't drive the browser leg.** Fixed by `coalesce(...,'')` on the 8 token columns; login then succeeded.
+
+**Observed live (real browser, real session):**
+1. **Login → /dashboard** at balance 70: ring 70%, 7/10 stamps, "30 points to your $10.00 reward", redeem **disabled**. → `audit-dashboard-light-70.png`
+2. **LIVE REALTIME EARN — renders live, YES.** Browser open, NO reload: bumped DB balance 90→110 via the documented `app.points_ctx` points path (the exact UPDATE Phase-5 `add_points` will broadcast). Polling the live DOM: progressbar → `100 of 100`, stamps → `10 of 10`, redeem CTA → **enabled**, all within ~1s. → `audit-dashboard-light-eligible-110.png` (full ring, all stamps, "Reward ready! 🎉", glowing red CTA, hero "110 points").
+3. **Dark mode** captured via emulated `prefers-color-scheme: dark`: correct token flip, black bg, dark card, constant brand colors. → `audit-dashboard-dark.png`
+4. **Redeem dialog** opened live (correct title/body/Confirm/Cancel/Close; focus trapped on Cancel). The confirm **click** could not complete end-to-end in the browser — the redeem server-action POST + `revalidatePath("/dashboard")` re-render repeatedly tripped the **Windows `.next` dev-server race** (500 / `routes-manifest.json` ENOENT / webpack pack-rename). Environment, not app code. The redeem path is otherwise **fully proven live via the RPC** (VERIFIED GOOD #2/#3).
+5. **Console during the realtime update: clean** — no subscription errors, no unhandled rejections, no leaked-channel warnings. Only console errors: the `/transactions` 404 (M-5) and the dev-server 500s from the `.next` race.
+
+**Screenshots captured (repo root):**
+- `audit-dashboard-light-70.png` — light, balance 70, mid-progress, CTA disabled.
+- `audit-dashboard-light-eligible-110.png` — light, AFTER live realtime earn to 110: full ring, 10/10, "Reward ready!", enabled glowing CTA. **Proof realtime rendered live.**
+- `audit-dashboard-dark.png` — dark mode, eligible, correct tokens.
+
+**Could NOT verify live (with reason):**
+- Redeem confirm **click** end-to-end through the UI (env `.next` race on the POST/revalidate). Mitigated: RPC + action logic proven via SQL.
+- Confetti *render* — it auto-dismisses ~1.6s; the DOM poll began after the ~1s realtime latency, so it had already played/unmounted (the crossing definitely triggered — eligible state rendered). Reduced-motion suppression verified by code, not driven live.
+- 60fps device profile, real-device haptics, full axe/VoiceOver sweep — all Phase 11.
+
+---
+
+## TOP 3 PRIORITIES FOR THE FIXER
+
+1. **M-1 — Scope the recent-activity query to the user.** Add `.eq("user_id", user.id)` in `dashboard/page.tsx:46-50` so an admin's own dashboard doesn't surface a global transaction feed (correctness + privacy). *(Highest value — only finding with a real behavioral consequence.)*
+2. **M-5 — Fix the dead `/transactions` link** (`RecentActivity.tsx:54`): repoint to `/dashboard` or remove until Phase 6. Eliminates a live 404. One line.
+3. **M-2/M-3 — Stamp gap 8→12px and size 36→40px** to meet DESIGN_SYSTEM §5.1 (verify ring fit), or log the deviation in PHASE_LOG. *(While in `actions/rewards.ts`, also do the cheap N-1 tighten of `isInsufficientBalance`.)*
+
+---
+
+## ENVIRONMENT NOTE (for the Orchestrator)
+
+The Windows `.next` filesystem race is **real and disruptive in dev mode** on this machine: repeated route recompiles (especially after a server-action `revalidatePath`) intermittently 500 with `routes-manifest.json` ENOENT and webpack pack-rename failures, sometimes needing `rm -rf .next` + dev restart. The **production `build` is unaffected** (clean exit 0). This does not reflect on Phase-4 code quality but will keep biting interactive dev/verify sessions until the Defender exclusion (`scripts/windows-defender-exclude.ps1`, Phase-1 M-1) is applied to the `.next` path. The seeded test user (`phase4-test@doncarlos.test` / `Test123!pass`, token columns now non-NULL) is left ready for re-use; balance reset to 70.
