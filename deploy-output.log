@@ -1,0 +1,10 @@
+Vercel CLI 54.9.1 (Node.js 24.14.0)
+Retrieving project…
+Deploying sidekick-s-projects/don-carlos-rewards
+Uploading [--------------------] (0.0B/107B)
+Uploading [====================] (107.0B/107B)
+  Inspect     https://vercel.com/sidekick-s-projects/don-carlos-rewards/BzXUqNVkviEKLiePiEUaK5y4eZqk
+▲ Production  https://don-carlos-rewards-8yv77uddd-sidekick-s-projects.vercel.app
+https://don-carlos-rewards-8yv77uddd-sidekick-s-projects.vercel.appBuilding…
+Building…
+Error: Command "npm run build" exited with 1

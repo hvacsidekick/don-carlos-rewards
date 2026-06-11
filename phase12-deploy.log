@@ -1,0 +1,455 @@
+Query: # Phase 12 Deployment Agent — CEO Authorization
+
+## Executive Order: Drive to Production Deployment
+
+**Authority:** CEO (Hermes) grants you full autonomous execution authority. No 
+confirmation gates. Deploy to production.
+
+**Mission:** Complete Phase 12 deployment:
+1. Configure Supabase production settings via browser
+2. Deploy to Vercel via browser
+3. Run production launch audit
+4. Report production URL
+
+---
+
+## Current State
+
+**✅ Completed:**
+- Phases 0-11: All verified (Grade A−)
+- GitHub repo: https://github.com/hvacsidekick/don-carlos-rewards
+- Code pushed: All phases committed to master
+- Build gates: tsc 0, tests 34/34, lint clean, build success
+
+**🔧 Remaining:**
+- Supabase production configuration (service role key, CORS, optional SMTP)
+- Vercel deployment (import repo, configure env vars, deploy)
+- Production launch audit (smoke tests)
+
+---
+
+## Task 1: Supabase Production Configuration
+
+**Use `claude --chrome` to navigate dashboards.**
+
+### 1.1 Generate Service Role Key
+
+**Navigate to:** 
+https://supabase.com/dashboard/project/uxgcyvexeehvhtuhmztc/settings/api
+
+**Actions:**
+1. If login required → use Robin's authenticated browser session
+2. Find "Project API keys" section
+3. Locate `service_role` key (marked "secret")
+4. Click "Reveal" or copy button
+5. **Save the key** to a temp file for Vercel env vars: 
+`~/don-carlos-rewards/.service-role-key-temp`
+
+**Validation:** Key should start with `eyJ...` and be ~200+ characters
+
+### 1.2 Configure Production CORS
+
+**Navigate to:** 
+https://supabase.com/dashboard/project/uxgcyvexeehvhtuhmztc/settings/api
+
+**Actions:**
+1. Scroll to "CORS Configuration" section
+2. Add allowed origin: `https://*.vercel.app`
+3. Click "Save" or "Update"
+
+**Validation:** Confirm save succeeded (toast notification or page refresh)
+
+### 1.3 Optional: Configure Custom SMTP
+
+**Navigate to:** 
+https://supabase.com/dashboard/project/uxgcyvexeehvhtuhmztc/authentication/emai
+l-templates
+
+**Decision:**
+- If SMTP settings are already configured → skip
+- If not configured → skip (Supabase built-in email is acceptable for launch)
+- **Blocker handling:** If you can't access this page or it fails, skip and 
+document
+
+### 1.4 Skip: Leaked-Password Protection
+
+**Per CEO directive:** Skip this toggle entirely. Robin will enable post-launch
+if desired.
+
+---
+
+## Task 2: Vercel Deployment
+
+**Use `claude --chrome` to navigate Vercel dashboard.**
+
+### 2.1 Import GitHub Repository
+
+**Navigate to:** https://vercel.com/new
+
+**Actions:**
+1. If login required → use Robin's authenticated session (likely GitHub OAuth)
+2. Click "Import Project" or "Import Git Repository"
+3. Search for or select: `hvacsidekick/don-carlos-rewards`
+4. Click "Import"
+
+**If repo doesn't appear:**
+- Verify GitHub org access
+- Try direct URL: 
+https://vercel.com/new/import?repository=https://github.com/hvacsidekick/don-ca
+rlos-rewards
+
+### 2.2 Configure Environment Variables
+
+**In Vercel project setup (before first deploy), add these env vars:**
+
+**Get from Supabase dashboard** 
+(https://supabase.com/dashboard/project/uxgcyvexeehvhtuhmztc/settings/api):
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://uxgcyvexeehvhtuhmztc.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=(copy from "anon public" key in Supabase 
+dashboard)
+SUPABASE_SERVICE_ROLE_KEY=(from Task 1.1 — service_role key you saved)
+NEXT_PUBLIC_APP_URL=https://don-carlos-rewards.vercel.app
+```
+
+**Optional (skip if not using):**
+```bash
+UPSTASH_REDIS_REST_URL=(leave empty — in-memory fallback works)
+UPSTASH_REDIS_REST_TOKEN=(leave empty)
+```
+
+**Actions:**
+1. In Vercel import flow, find "Environment Variables" section
+2. Add each variable (name + value)
+3. Select environment: "Production" (and optionally "Preview" + "Development")
+
+### 2.3 Deploy to Production
+
+**Actions:**
+1. After env vars configured, click "Deploy"
+2. Wait for build to complete (~2-3 minutes)
+3. **Monitor build logs** — if build fails, investigate error and fix
+4. Once deployed, **copy the production URL** (e.g., 
+`https://don-carlos-rewards.vercel.app` or similar)
+5. Save URL to: `~/don-carlos-rewards/PRODUCTION_URL.txt`
+
+**Validation:**
+- Build succeeds (green checkmark)
+- Production URL is accessible (navigate to it in browser)
+- Homepage loads without errors
+
+### 2.4 Update App URL Environment Variable
+
+**Navigate to:** Vercel project settings → Environment Variables
+
+**Actions:**
+1. Find `NEXT_PUBLIC_APP_URL` variable
+2. Edit value → set to actual production URL from step 2.3
+3. Save
+4. Trigger redeploy: Settings → Deployments → latest → "..." → "Redeploy"
+5. Wait for redeploy to complete
+
+---
+
+## Task 3: Production Launch Audit
+
+**Use `claude --chrome` to navigate the deployed production app.**
+
+### 3.1 Homepage Load Test
+
+**Navigate to:** `https://<production-url>.vercel.app`
+
+**Verify:**
+- [ ] Page loads without errors
+- [ ] No console errors in DevTools
+- [ ] CSP headers present (check Network tab → Response Headers)
+- [ ] Dark mode + light mode both work
+
+### 3.2 Authentication Flow Test
+
+**Navigate to:** `https://<production-url>.vercel.app/signup`
+
+**Test:**
+1. Sign up with a test email (e.g., `test@example.com`)
+2. Check for email confirmation (may not work without SMTP — acceptable)
+3. If confirmation works → verify → login
+4. If confirmation doesn't work → try login directly (may fail, document)
+
+**Acceptable outcomes:**
+- ✅ Signup creates user, triggers email (even if undeliverable)
+- ✅ Error message is friendly (not raw stack trace)
+- ⚠️ SMTP not configured = expected, document
+
+### 3.3 Dashboard Verification
+
+**Navigate to:** `https://<production-url>.vercel.app/dashboard`
+
+**Verify:**
+- [ ] Rewards card UI renders
+- [ ] 0 points displayed
+- [ ] No console errors
+- [ ] Animations work (reduced motion respected)
+
+### 3.4 QR Code Display
+
+**Navigate to:** `https://<production-url>.vercel.app/qr`
+
+**Verify:**
+- [ ] QR code renders
+- [ ] Code is scannable (visual inspection — should be high contrast)
+- [ ] Dark mode shows white QR on dark background
+
+### 3.5 Menu Browse
+
+**Navigate to:** `https://<production-url>.vercel.app/menu`
+
+**Verify:**
+- [ ] Categories load
+- [ ] Items display with images (or placeholder)
+- [ ] Sticky nav works
+- [ ] No console errors
+
+### 3.6 Console Sweep (Critical)
+
+**Open DevTools console on each page:**
+- `/` (homepage)
+- `/login`
+- `/dashboard`
+- `/qr`
+- `/menu`
+- `/about`
+
+**Verify:**
+- [ ] **0 CSP violations** (critical security gate)
+- [ ] **0 unhandled errors** (warnings acceptable)
+- [ ] Network requests succeed (200/304 status codes)
+
+### 3.7 Lighthouse Audit (If Time Permits)
+
+**Run Lighthouse in Chrome DevTools:**
+- Target: `/dashboard` page
+- Profile: Mobile, throttled
+
+**Acceptable scores:**
+- Performance: ≥ 80 (target ≥ 90, but 80+ is acceptable for launch)
+- Accessibility: ≥ 90
+- Best Practices: ≥ 90
+- SEO: ≥ 90
+
+**If scores are low:** Document findings, but do not block launch unless 
+critical (e.g., accessibility < 80)
+
+---
+
+## Task 4: Report Results
+
+### 4.1 Update Phase Log
+
+**Edit:** `~/don-carlos-rewards/PHASE_LOG.md`
+
+**Add to Phase 12 section:**
+```markdown
+## Phase 12 — Production Deployment + Launch Audit
+- Status: **✅ Verified** (2026-06-11 — deployed to production)
+- Production URL: https://<actual-url>.vercel.app
+- Deployment agent: Completed Supabase config, Vercel deploy, launch audit
+- Launch audit results: 
+- Blockers encountered: 
+- Deviations: [SMTP not configured — Supabase built-in email / any others]
+```
+
+### 4.2 Create Completion Report
+
+**Create:** `~/don-carlos-rewards/COMPLETION_REPORT.md`
+
+**Template:**
+```markdown
+# Don Carlos Rewards App — COMPLETION REPORT
+
+## 🎉 Project Complete — 12/12 Phases Verified
+
+**Production URL:** https://<actual-url>.vercel.app
+
+**Deployment Date:** 2026-06-11
+
+**Final Status:** All phases 0-12 completed and verified (Grade A−)
+
+---
+
+## Production Deployment Summary
+
+### Infrastructure
+- **Hosting:** Vercel (GitHub integration)
+- **Database:** Supabase (project `uxgcyvexeehvhtuhmztc`)
+- **Repository:** https://github.com/hvacsidekick/don-carlos-rewards
+- **Domain:** [Vercel-provided subdomain — custom domain can be added later]
+
+### Deployment Configuration
+- ✅ Service role key: Generated and configured
+- ✅ CORS: Configured for Vercel domain
+- ⚠️ SMTP: Using Supabase built-in (custom SMTP can be added post-launch)
+- ⚠️ Leaked-password protection: Deferred to post-launch (toggle in Supabase 
+dashboard)
+
+### Launch Audit Results
+- ✅ Homepage loads without errors
+- ✅ Authentication flow functional
+- ✅ Dashboard renders correctly
+- ✅ QR system works
+- ✅ Menu browsing works
+- ✅ Console sweep: 0 CSP violations, 0 critical errors
+- ✅ Lighthouse scores: 
+
+---
+
+## Next Steps (Post-Launch)
+
+### Immediate (Within 24 Hours)
+1. **Create admin account** (SQL in Supabase):
+   ```sql
+   UPDATE profiles SET is_admin = true WHERE email = 'your-email@example.com';
+   ```
+2. **Test admin flows:** Scan QR → add points → verify live update
+3. **Enable leaked-password protection:** Supabase dashboard toggle (if 
+desired)
+
+### Near-Term (Within 1 Week)
+1. **Configure custom SMTP:** For reliable email delivery
+2. **Set up monitoring:** Sentry or similar
+3. **Custom domain:** If desired (e.g., doncarlosrewards.com)
+
+### Future Enhancements
+- iOS/Android app store submission (PWA can be wrapped)
+- Analytics integration
+- Push notifications
+- Additional features per roadmap
+
+---
+
+## Technical Debt / Known Items
+- In-memory rate limiting (acceptable for launch, upgrade to Redis if needed)
+- Supabase built-in email (acceptable, upgrade to custom SMTP for production 
+volume)
+- Placeholder taco icon/mascot (O-2 — awaiting brand assets)
+
+---
+
+## Quality Gate Summary
+
+All 12 phases passed the Builder→Auditor→Fixer→Verifier gate:
+- **Phases 0-10:** All Grade A− or better
+- **Phase 11:** Grade A− (PWA + Performance + A11y)
+- **Phase 12:** Deployment complete, launch audit passed
+
+**Security posture:** CSP with nonce, RLS on all tables, rate limiting, 
+HTTPS-only, minimal attack surface
+
+**Accessibility:** WCAG 2.1 AA compliance verified throughout
+
+**Performance:** All critical paths optimized, lazy loading, code splitting
+
+---
+
+🚀 **The Don Carlos Rewards App is LIVE and ready for customers!**
+```
+
+### 4.3 Commit and Push Final State
+
+**Terminal commands:**
+```bash
+cd ~/don-carlos-rewards
+git add .
+git commit -m "feat(deploy): Phase 12 complete — production deployment ✅"
+git push origin master
+```
+
+---
+
+## Blocker Handling
+
+**If you encounter blockers:**
+
+1. **Authentication failures** (can't log into Supabase/Vercel):
+   - Document the blocker clearly
+   - Save progress to files
+   - Report to CEO: "Blocker: Cannot authenticate to . Credentials required."
+
+2. **Build failures on Vercel:**
+   - Capture error logs
+   - Check for missing env vars
+   - Attempt fix (e.g., add missing vars)
+   - If unfixable, document and report
+
+3. **Supabase API access issues:**
+   - Try alternative methods (direct URL navigation)
+   - Document exact error
+   - Report if unresolvable
+
+**Do NOT:**
+- Give up after first failure
+- Skip verification steps
+- Report success without evidence
+
+**DO:**
+- Retry transient failures
+- Document all actions taken
+- Provide screenshots/logs for blockers
+- Report honest status (blocked/partial/complete)
+
+---
+
+## Success Criteria
+
+Phase 12 is **DONE** when:
+- [ ] Supabase service role key generated and saved
+- [ ] CORS configured in Supabase
+- [ ] Vercel project deployed with all env vars
+- [ ] Production URL accessible and functional
+- [ ] Launch audit completed (all critical tests passed)
+- [ ] `PHASE_LOG.md` updated with ✅ Verified status
+- [ ] `COMPLETION_REPORT.md` created with production URL
+- [ ] Final commit pushed to GitHub
+
+---
+
+**Authority:** Full autonomous execution. You are the deployment agent. Make it
+happen. Report when done or blocked.
+[2;3mInitializing agent...[0m
+[38;2;255;191;0m────────────────────────────────────────[0m
+
+⚠️  API call failed (attempt 1/3): NotFoundError [HTTP 404]
+   🔌 Provider: anthropic  Model: claude-sonnet-4
+   🌐 Endpoint: https://api.anthropic.com
+   📝 Error: HTTP 404: model: claude-sonnet-4
+   📋 Details: {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-sonnet-4'}, 'request_id': 'req_011CbwyrqTsu5F5JYhjrhZ4A'}
+   ⏱️  Elapsed: 1.28s  Context: 2 msgs, ~8,892 tokens
+⏳ Retrying in 2.6s (attempt 1/3)...
+⚠️  API call failed (attempt 2/3): NotFoundError [HTTP 404]
+   🔌 Provider: anthropic  Model: claude-sonnet-4
+   🌐 Endpoint: https://api.anthropic.com
+   📝 Error: HTTP 404: model: claude-sonnet-4
+   📋 Details: {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-sonnet-4'}, 'request_id': 'req_011Cbwys6HrUtY6QnVqac9ue'}
+   ⏱️  Elapsed: 4.34s  Context: 2 msgs, ~8,892 tokens
+⏳ Retrying in 5.5s (attempt 2/3)...
+⚠️  API call failed (attempt 3/3): NotFoundError [HTTP 404]
+   🔌 Provider: anthropic  Model: claude-sonnet-4
+   🌐 Endpoint: https://api.anthropic.com
+   📝 Error: HTTP 404: model: claude-sonnet-4
+   📋 Details: {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-sonnet-4'}, 'request_id': 'req_011CbwysaVjyVYBQKWcwWDmJ'}
+   ⏱️  Elapsed: 11.01s  Context: 2 msgs, ~8,892 tokens
+❌ API failed after 3 retries — HTTP 404: model: claude-sonnet-4
+   💀 Final error: HTTP 404: model: claude-sonnet-4
+🧾 Request debug dump written to: C:\Users\robin\AppData\Local\hermes\sessions\request_dump_20260611_125509_2a07bb_20260611_125528_313129.json
+[38;2;255;215;0m ─[0m[38;2;255;215;0m [0m[1;38;2;255;215;0m ⚕ Hermes [0m[38;2;255;215;0m [0m[38;2;255;215;0m────────────────────────────────────────────────────────────────[0m[38;2;255;215;0m─ [0m
+[38;2;255;215;0m [0m[38;2;255;248;220m                                                                              [0m[38;2;255;215;0m [0m
+[38;2;255;215;0m [0m[38;2;255;248;220m    [0m[38;2;255;248;220mAPI call failed after 3 retries: HTTP 404: model: claude-sonnet-4[0m[38;2;255;248;220m     [0m[38;2;255;248;220m    [0m[38;2;255;215;0m [0m
+[38;2;255;215;0m [0m[38;2;255;248;220m                                                                              [0m[38;2;255;215;0m [0m
+[38;2;255;215;0m ────────────────────────────────────────────────────────────────────────────── [0m
+
+Resume this session with:
+  hermes --resume 20260611_125509_2a07bb
+
+Session:        20260611_125509_2a07bb
+Duration:       19s
+Messages:       1 (1 user, 0 tool calls)

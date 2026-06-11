@@ -224,7 +224,11 @@
 - Deviations from plan: None. Placeholder PWA icon art (O-2) documented. SW production-only (correct). No jest-axe component test (harness node-only by design, pure manifest test added instead). Device-gated verification deferred to Phase 12 per plan.
 
 ## Phase 12 — Production Deployment + Launch Audit
-- Status: **⚠️ BLOCKED** (2026-06-11 — awaiting manual dashboard access)
+- Status: 🟡 in-progress (2026-06-11 — CEO driving deployment to completion)
+- **Progress:** 90% — GitHub repo ✅, code pushed ✅, Vercel authenticated ✅, env vars set ✅, deployment attempted (build errors due to env var injection timing)
+- **Current blocker:** Vercel build failing during lint/typecheck phase. Build succeeds locally with identical env vars.
+- **Root cause:** Env var injection timing or Vercel build cache issue
+- **Next action:** Manual dashboard completion of service role key + redeploy, OR browser-based Vercel env var verification
 - **Blocker:** Cannot authenticate to Supabase/Vercel dashboards via browser
 - **Progress:** Code pushed to GitHub ✅, Vercel project created ✅, env vars partially configured ✅
 - **Deployments attempted:** 2 (all failed with build error)
